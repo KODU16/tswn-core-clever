@@ -18,6 +18,29 @@ pub struct CollectConfig {
     pub max_rounds: u64,
 }
 
+/// 归一化进程级游标：`last_updates_id` 是引擎前端战报批次计数器
+/// （RUN_UPDATES_ID 进程级 AtomicU64），随线程交错变化、不参与游戏机制；
+/// 采集导出时统一归零，保证相同配置不同线程数/时序下输出逐字节一致。
+fn normalize_process_cursors(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map.iter_mut() {
+                if key == "last_updates_id" {
+                    *child = Value::Null;
+                } else {
+                    normalize_process_cursors(child);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                normalize_process_cursors(item);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// 决策机会的 RNG 边界说明（写入决策上下文与 manifest）。
 pub const RNG_BOUNDARY_DESC: &str = "决策检查点位于回合调度边界（行动选择前）。行动者、行动前钩子与智慧判定 \
 在试算中确定性地从检查点随机流重放；候选枚举消耗的耗蓝字节在决策点一次性结算（所有试算共用，属固定情景）。\
@@ -249,7 +272,7 @@ fn capture_decision(
     let seed_set_id = format!("ss{battle_index:08}-{decision_n:02}");
     let decision_round = checkpoint.round;
 
-    let state_line = json!({
+    let mut state_line = json!({
         "schema_version": 1,
         "state_id": state_id,
         "battle_id": battle_id,
@@ -270,6 +293,7 @@ fn capture_decision(
         "feature_schema_id": Value::Null,
         "feature_overflow": Value::Null,
     });
+    normalize_process_cursors(&mut state_line);
 
     // 试算 seed 列表：baseline 与全部候选共用同一组 seed（配对样本）。
     let seeds: Vec<u64> = (0..trials)
@@ -371,6 +395,22 @@ fn capture_decision(
     })
 }
 
+/// 纯原版复跑一场战斗（不做任何采样探测），返回 (胜者队伍, 推进回合数)。
+/// 用于验收「原版正式轨迹在开启/关闭采样时结果与 RNG 完全一致」。
+pub fn replay_legacy_battle(groups: &[Vec<String>], seed_line: &str, max_rounds: u64) -> Result<(Option<usize>, u64), String> {
+    let mut runner = RuntimeRunner::new_from_groups_with_seed(groups, &[seed_line.to_owned()]).map_err(|e| e.to_string())?;
+    loop {
+        if runner.runtime().world.winner_team().is_some() || runner.runtime().round >= max_rounds {
+            break;
+        }
+        let outcome = runner.runtime_mut().run_minimal_round_no_capture();
+        if outcome.winner_team.is_some() {
+            break;
+        }
+    }
+    Ok((runner.runtime().world.winner_team(), runner.runtime().round))
+}
+
 /// 采集一场战斗：正式轨迹只用原版策略，最多 4 个决策机会。
 pub fn collect_battle(
     groups: &[Vec<String>],
@@ -440,51 +480,44 @@ pub fn collect_battle(
     })
 }
 
-/// 用引擎名字构造 API 重新生成一个名字的属性与技能（audit-names 用）。
+/// 用引擎名字构造 API 重新生成一个名字的原始八围与技能（audit-names 用）。
+/// 八围顺序与 to-diy/GPU 构造器一致：atk, def, spd, agi, mag, res, wis, maxhp。
 pub fn audit_name_record(full_name: &str) -> Result<Value, String> {
-    let (groups, _) = RuntimeRunner::split_namerena_into_groups(full_name.to_owned());
-    let runner = RuntimeRunner::new_from_groups_with_seed(&groups, &["audit-names".to_owned()])
-        .map_err(|e| format!("构造 {full_name} 失败：{e}"))?;
-    let runtime = runner.runtime();
-    let entity = runtime.entities.iter().next().map(|(_, e)| e).ok_or("空实体")?;
-    let template = &entity.template;
-    let attrs = [
-        template.max_hp,
-        template.attack,
-        template.magic,
-        template.wisdom,
-        template.speed,
-        template.defense,
-        template.resistance,
-        template.agility,
-    ];
-    let sum: i32 = attrs.iter().sum();
-    let skills = &template.skills;
+    let input = crate::namerena::NamerenaInput::from_raw_groups(&[vec![full_name.to_owned()]])
+        .map_err(|e| format!("解析 {full_name} 失败：{e}"))?;
+    let roster = crate::namerena::PreparedRoster::build(&input, crate::namerena::eval_name::DEFAULT_EVAL_RQ)
+        .map_err(|e| format!("构造 {full_name} 失败：{e:?}"))?;
+    let player = roster.players.first().ok_or("空玩家")?;
+    let attrs: Vec<u32> = player.attrs.to_vec();
+    let sum: u64 = attrs.iter().map(|a| u64::from(*a)).sum();
+    let status = &player.status;
+    let skills = &player.skills;
     let lanes: Vec<Value> = (0..40)
         .map(|lane| {
-            // 普通玩家的 lane 即 pbb 槽位 key；特殊技能（武器/召唤身份）无 pbb 槽位语义。
-            let slot_key = skills
-                .skills()
-                .get(lane)
-                .and_then(|&skill_id| runtime.registry.skill(skill_id))
-                .filter(|spec| spec.export_name.starts_with("core.skill."))
-                .map(|_| json!(lane))
-                .unwrap_or(Value::Null);
+            let key = skills.entries.get(lane).map(|entry| entry.key);
             json!({
                 "lane": lane,
-                "slot_key": slot_key,
-                "level": skills.level_at(lane),
+                "slot_key": key,
+                "level": skills.entries.get(lane).map(|entry| entry.level),
             })
         })
         .collect();
     Ok(json!({
         "full_name": full_name,
         "attrs": attrs,
-        "attr_sum_engine": template.attr_sum,
-        "attr_sum_computed": sum,
-        "attr_props": attrs.iter().map(|a| f64::from(*a) / f64::from(sum)).collect::<Vec<_>>(),
+        "attr_sum": sum,
+        "status": {
+            "attack": status.attack,
+            "defense": status.defense,
+            "speed": status.speed,
+            "agility": status.agility,
+            "magic": status.magic,
+            "resistance": status.resistance,
+            "wisdom": status.wisdom,
+            "max_hp": status.max_hp,
+        },
         "skills_lanes": lanes,
-        "active_order": skills.active_order(),
+        "active_order": skills.active_order,
     }))
 }
 

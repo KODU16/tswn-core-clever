@@ -9,7 +9,7 @@
 //!
 //! 样本内容只由 (master_seed, 配置, battle_index) 决定；线程数与执行顺序不影响样本。
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
@@ -26,6 +26,27 @@ use tswn_core::runtime::collect::{self, CollectConfig, CollectedBattle, Collecte
 const SCHEMA_VERSION: u64 = 1;
 /// 每场战斗最多采集的决策数（规范固定值）。
 const MAX_DECISIONS_PER_BATTLE: usize = 4;
+
+/// 提取 CSV 行的首列（candidate_id），处理引号包裹与双引号转义
+/// （名字可能含 `"`、`,` 等字符，CSV 写入端按标准规则加引号）。
+fn csv_first_field(line: &str) -> String {
+    let line = line.trim_end_matches(['\r', '\n']);
+    if let Some(rest) = line.strip_prefix('"') {
+        let mut out = String::new();
+        let mut chars = rest.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '"' => match chars.next() {
+                    Some('"') => out.push('"'),
+                    _ => break, // 字段结束引号
+                },
+                _ => out.push(c),
+            }
+        }
+        return out;
+    }
+    line.split(',').next().unwrap_or("").trim().to_owned()
+}
 
 // ---------------------------------------------------------------------------
 // 确定性工具
@@ -87,14 +108,6 @@ fn in_d4_zero_subset(full_name: &str) -> bool {
 struct Cli {
     #[command(flatten)]
     collect: CollectArgs,
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand, Clone)]
-enum Commands {
-    /// 用引擎名字构造 API 重新生成若干名字的属性与技能，供与 CSV 核对。
-    AuditNames(AuditNamesArgs),
 }
 
 #[derive(Args, Clone)]
@@ -133,17 +146,15 @@ struct CollectArgs {
     /// 源归档 SHA-256（由外部脚本传入，写入 manifest）。
     #[arg(long)]
     source_archive_sha256: Option<String>,
-}
-
-#[derive(Args, Clone)]
-struct AuditNamesArgs {
+    /// 审计模式：用引擎名字构造 API 重新生成属性与技能，供与 CSV 核对（配合 --audit-count）。
     #[arg(long)]
-    names_csv: PathBuf,
-    #[arg(long)]
-    out: PathBuf,
-    /// 抽样个数。
+    audit_names: bool,
+    /// 审计模式抽样个数。
     #[arg(long, default_value_t = 128)]
-    count: usize,
+    audit_count: usize,
+    /// 验收模式：从进度日志复跑 N 场纯原版正式轨迹，与采集时的胜者/回合数比对。
+    #[arg(long)]
+    verify_legacy: Option<usize>,
 }
 
 // ---------------------------------------------------------------------------
@@ -181,14 +192,14 @@ fn load_pools(csv: &Path, subset: &str) -> Result<(Vec<NamePool>, usize), String
         }
         rows += 1;
         // 只取首列（完整名字，含 @ 后缀）；名字由引擎构造，不进网络特征。
-        let full_name = line.split(',').next().unwrap_or("").trim();
+        let full_name = csv_first_field(&line);
         if full_name.is_empty() || !seen.insert(full_name.to_owned()) {
             continue;
         }
-        if use_d4 && !in_d4_zero_subset(full_name) {
+        if use_d4 && !in_d4_zero_subset(&full_name) {
             continue;
         }
-        match split_of(full_name) {
+        match split_of(&full_name) {
             "train" => pools[0].push(full_name.to_owned()),
             "validation" => pools[1].push(full_name.to_owned()),
             _ => pools[2].push(full_name.to_owned()),
@@ -319,6 +330,8 @@ struct ShardState {
     battles_seen: BTreeMap<u64, usize>,
     errors: Vec<Value>,
     by_split: BTreeMap<&'static str, u64>,
+    /// 分片内汇总（仅已落盘前缀计入最终 summary）。
+    totals: Totals,
 }
 
 fn write_gzip_jsonl(path: &Path, lines: &[Value]) -> Result<String, String> {
@@ -411,6 +424,7 @@ fn buffer_report(
         battles_seen: BTreeMap::new(),
         errors: Vec::new(),
         by_split: BTreeMap::new(),
+        totals: Totals::default(),
     });
     shard.battles_seen.insert(report.battle_index, report.decisions.len());
     if let Some(_error) = &report.error {
@@ -439,11 +453,28 @@ fn buffer_report(
         *totals.by_split.entry(report.split).or_insert(0) += 1;
         *totals.by_team_size.entry(report.team_size).or_insert(0) += 1;
         *shard.by_split.entry(report.split).or_insert(0) += 1;
+        shard.totals.decisions += 1;
+        shard.totals.rollouts += decision.rollouts;
+        shard.totals.unresolved += decision.unresolved as u64;
+        shard.totals.candidates_sum += decision.candidates as u64;
+        shard.totals.skipped_candidates += decision.skipped_candidates as u64;
+        shard.totals.rounds_sum += report.audit_line["rounds"].as_u64().unwrap_or(0);
+        if decision.state_line["round_boundary_state"].is_object() {
+            shard.totals.decisions_with_boundary += 1;
+        }
+        *shard.totals.by_split.entry(report.split).or_insert(0) += 1;
+        *shard.totals.by_team_size.entry(report.team_size).or_insert(0) += 1;
     }
     for (reason, count) in &report.skip_counts {
         *totals.skip_counts.entry((*reason).to_owned()).or_insert(0) += *count;
+        *shard.totals.skip_counts.entry((*reason).to_owned()).or_insert(0) += *count;
     }
     totals.battles_done += 1;
+    shard.totals.battles_done += 1;
+    // 进度日志记录每场战斗的审计行（正式轨迹复现信息 + 终止状态），resume 与验收依赖它。
+    serde_json::to_writer(&mut *journal_writer, &report.audit_line).map_err(|e| format!("写进度日志失败：{e}"))?;
+    journal_writer.write_all(b"\n").map_err(|e| e.to_string())?;
+    journal_writer.flush().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -461,6 +492,7 @@ fn flush_prefix(
     stop: &AtomicBool,
     final_shard: &mut Option<u64>,
     targets: &[(usize, &'static str)],
+    flushed_totals: &mut Totals,
 ) -> Result<(), String> {
     loop {
         let Some(shard) = shards.remove(flushed_prefix) else { break };
@@ -475,6 +507,25 @@ fn flush_prefix(
         for (split, count) in &shard.by_split {
             *decisions_by_split.entry(split).or_insert(0) += *count;
         }
+        // 分片内统计并入已落盘前缀汇总（最终 summary 只反映前缀内容）。
+        flushed_totals.decisions += shard.totals.decisions;
+        flushed_totals.rollouts += shard.totals.rollouts;
+        flushed_totals.unresolved += shard.totals.unresolved;
+        flushed_totals.candidates_sum += shard.totals.candidates_sum;
+        flushed_totals.skipped_candidates += shard.totals.skipped_candidates;
+        flushed_totals.rounds_sum += shard.totals.rounds_sum;
+        flushed_totals.decisions_with_boundary += shard.totals.decisions_with_boundary;
+        flushed_totals.battles_done += shard.totals.battles_done;
+        for (split, count) in &shard.totals.by_split {
+            *flushed_totals.by_split.entry(split).or_insert(0) += *count;
+        }
+        for (size, count) in &shard.totals.by_team_size {
+            *flushed_totals.by_team_size.entry(*size).or_insert(0) += *count;
+        }
+        for (reason, count) in &shard.totals.skip_counts {
+            *flushed_totals.skip_counts.entry(reason.clone()).or_insert(0) += *count;
+        }
+        flushed_totals.failed_battles += shard.errors.len() as u64;
         eprintln!("[clever-collect] 分片 {flushed_prefix:06} 落盘：{n} 决策");
         let journal_line = json!({
             "type": "shard",
@@ -525,15 +576,47 @@ fn writer_loop(
         (args.decisions * 10 / 100, "test"),
     ];
     let mut totals = Totals::default();
+    let mut flushed_totals = Totals::default();
     let mut decisions_by_split: BTreeMap<&'static str, u64> = BTreeMap::new();
     let mut flushed_prefix = 0u64;
     if let Some((existing, done_shards)) = resume {
         for (split, count) in existing {
             decisions_by_split.insert(split, count);
         }
-        totals.decisions = decisions_by_split.values().sum();
         flushed_prefix = done_shards;
-        eprintln!("[clever-collect] resume：已有 {} 决策、{} 分片", totals.decisions, done_shards);
+        // 已落盘分片的汇总从上次 summary.json 读回（重跑未落盘分片不计入）。
+        if let Ok(previous) = fs::read_to_string(out.join("summary.json"))
+            && let Ok(value) = serde_json::from_str::<Value>(&previous)
+        {
+            let take = |key: &str| value[key].as_u64().unwrap_or(0);
+            let take_map = |key: &str| -> BTreeMap<String, u64> {
+                value[key]
+                    .as_object()
+                    .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_u64().unwrap_or(0))).collect())
+                    .unwrap_or_default()
+            };
+            flushed_totals.decisions = take("decisions");
+            flushed_totals.rollouts = take("rollouts");
+            flushed_totals.unresolved = take("unresolved");
+            flushed_totals.failed_battles = take("failed_battles");
+            flushed_totals.battles_done = take("battles_done");
+            flushed_totals.skip_counts = take_map("skip_counts");
+            for (split, count) in take_map("by_split") {
+                if let Some(target) = ["train", "validation", "test"].iter().find(|s| **s == split) {
+                    *flushed_totals.by_split.entry(target).or_insert(0) += count;
+                }
+            }
+            for (size, count) in take_map("by_team_size") {
+                if let Ok(n) = size.parse::<usize>() {
+                    flushed_totals.by_team_size.insert(n, count);
+                }
+            }
+        }
+        totals.decisions = decisions_by_split.values().sum();
+        eprintln!(
+            "[clever-collect] resume：已有 {} 决策、{} 分片（汇总读回 {} 决策）",
+            totals.decisions, done_shards, flushed_totals.decisions
+        );
     }
     let mut shards: BTreeMap<u64, ShardState> = BTreeMap::new();
     let journal_path = out.join("progress.journal");
@@ -563,6 +646,7 @@ fn writer_loop(
             &stop,
             &mut final_shard,
             &targets,
+            &mut flushed_totals,
         )?;
         let _ = write_progress(out, &totals);
     }
@@ -578,6 +662,7 @@ fn writer_loop(
         &stop,
         &mut final_shard,
         &targets,
+        &mut flushed_totals,
     )?;
     let shortfall: Vec<Value> = targets
         .iter()
@@ -592,19 +677,19 @@ fn writer_loop(
         .collect();
     let summary = json!({
         "schema_version": SCHEMA_VERSION,
-        "decisions": totals.decisions,
-        "rollouts": totals.rollouts,
-        "unresolved": totals.unresolved,
-        "unresolved_rate": if totals.rollouts == 0 { 0.0 } else { totals.unresolved as f64 / totals.rollouts as f64 },
-        "by_split": totals.by_split,
-        "by_team_size": totals.by_team_size,
-        "skip_counts": totals.skip_counts,
-        "failed_battles": totals.failed_battles,
-        "battles_done": totals.battles_done,
-        "avg_candidates_mean": if totals.decisions == 0 { 0.0 } else { totals.candidates_sum as f64 / totals.decisions as f64 },
-        "skipped_candidates": totals.skipped_candidates,
-        "decisions_with_round_boundary_state": totals.decisions_with_boundary,
-        "avg_formal_rounds_per_battle": if totals.battles_done == 0 { 0.0 } else { totals.rounds_sum as f64 / totals.battles_done as f64 },
+        "decisions": flushed_totals.decisions,
+        "rollouts": flushed_totals.rollouts,
+        "unresolved": flushed_totals.unresolved,
+        "unresolved_rate": if flushed_totals.rollouts == 0 { 0.0 } else { flushed_totals.unresolved as f64 / flushed_totals.rollouts as f64 },
+        "by_split": flushed_totals.by_split,
+        "by_team_size": flushed_totals.by_team_size,
+        "skip_counts": flushed_totals.skip_counts,
+        "failed_battles": flushed_totals.failed_battles,
+        "battles_done": flushed_totals.battles_done,
+        "avg_candidates_mean": if flushed_totals.decisions == 0 { 0.0 } else { flushed_totals.candidates_sum as f64 / flushed_totals.decisions as f64 },
+        "skipped_candidates": flushed_totals.skipped_candidates,
+        "decisions_with_round_boundary_state": flushed_totals.decisions_with_boundary,
+        "avg_formal_rounds_per_battle": if flushed_totals.battles_done == 0 { 0.0 } else { flushed_totals.rounds_sum as f64 / flushed_totals.battles_done as f64 },
         "targets": shortfall,
         "pools": pools.iter().map(|p| json!({"split": p.split, "names": p.names.len()})).collect::<Vec<_>>(),
         "flushed_shards": flushed_prefix,
@@ -721,16 +806,117 @@ fn write_feature_schema(out: &Path) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// verify-legacy：纯原版复跑比对（验收：开启/关闭采样时正式轨迹一致）
+// ---------------------------------------------------------------------------
+
+fn verify_legacy_replay(out: &Path, count: usize, max_rounds: u64, decisions_per_shard: usize) -> Result<(), String> {
+    let journal = out.join("progress.journal");
+    let file = File::open(&journal).map_err(|e| format!("打开进度日志失败：{e}"))?;
+    let reader = BufReader::new(file);
+    let battles_per_shard = (decisions_per_shard.max(100).min(500) / MAX_DECISIONS_PER_BATTLE) as u64;
+    let mut checked = 0usize;
+    let mut mismatches = Vec::new();
+    let mut samples = Vec::new();
+    // 先读全部日志：战斗行在分片行之前，需先知道已落盘分片数再过滤。
+    let lines: Vec<String> = reader.lines().collect::<Result<_, _>>().map_err(|e| e.to_string())?;
+    let mut values = Vec::new();
+    let mut flushed_shards = 0u64;
+    for line in lines {
+        let value: Value = serde_json::from_str(&line).map_err(|e| format!("进度日志解析失败：{e}"))?;
+        if value["type"] == "shard" {
+            flushed_shards += 1;
+            continue;
+        }
+        if value["error"].is_string() {
+            continue;
+        }
+        values.push(value);
+    }
+    for value in values {
+        // 只复跑已落盘分片内的正式轨迹（停止边界后丢弃的战斗不计入）。
+        if let Some(index) = value["battle_index"].as_u64()
+            && index >= flushed_shards.saturating_mul(battles_per_shard)
+        {
+            continue;
+        }
+        if checked >= count {
+            break;
+        }
+        let Some(full_names) = value["full_names"].as_array() else {
+            continue;
+        };
+        let Some(seed_line) = value["battle_seed"].as_str() else {
+            continue;
+        };
+        let groups: Vec<Vec<String>> = full_names
+            .iter()
+            .filter_map(|team| {
+                team.as_array()
+                    .map(|names| names.iter().filter_map(|n| n.as_str().map(str::to_owned)).collect())
+            })
+            .collect();
+        if groups.len() != 2 {
+            continue;
+        }
+        match collect::replay_legacy_battle(&groups, seed_line, max_rounds) {
+            Ok((winner, rounds)) => {
+                let audit_winner = value["winner_team"].as_u64().map(|w| w as usize);
+                let audit_rounds = value["rounds"].as_u64().unwrap_or(0);
+                checked += 1;
+                if winner != audit_winner || rounds != audit_rounds {
+                    mismatches.push(json!({
+                        "battle_index": value["battle_index"],
+                        "audit_winner": audit_winner,
+                        "replay_winner": winner,
+                        "audit_rounds": audit_rounds,
+                        "replay_rounds": rounds,
+                    }));
+                }
+                if samples.len() < 3 {
+                    samples.push(json!({
+                        "battle_index": value["battle_index"],
+                        "winner": winner,
+                        "rounds": rounds,
+                        "match": winner == audit_winner && rounds == audit_rounds,
+                    }));
+                }
+            }
+            Err(error) => mismatches.push(json!({"battle_index": value["battle_index"], "error": error})),
+        }
+    }
+    let report = json!({
+        "schema_version": SCHEMA_VERSION,
+        "checked": checked,
+        "mismatches": mismatches.len(),
+        "samples": samples,
+        "detail": mismatches,
+        "note": "纯原版复跑（无采样探测）与采集审计行（winner_team/rounds）逐场比对；一致即证明采样不改动正式轨迹。",
+    });
+    fs::write(
+        out.join("verify_legacy.json"),
+        serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("写 verify_legacy.json 失败：{e}"))?;
+    eprintln!(
+        "[clever-collect] verify-legacy：复跑 {} 场，不一致 {} 场 -> {}",
+        checked,
+        mismatches.len(),
+        out.join("verify_legacy.json").display()
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // audit-names：引擎重生成名字属性/技能，供与 CSV 核对
 // ---------------------------------------------------------------------------
 
-fn audit_names(args: &AuditNamesArgs) -> Result<(), String> {
-    let file = File::open(&args.names_csv).map_err(|e| format!("打开 CSV 失败：{e}"))?;
+fn audit_names(names_csv: &Path, out: &Path, count: usize) -> Result<(), String> {
+    let file = File::open(names_csv).map_err(|e| format!("打开 CSV 失败：{e}"))?;
     let mut reader = BufReader::new(file);
     let mut header = String::new();
     reader.read_line(&mut header).map_err(|e| e.to_string())?;
     // 确定性抽样：对行号做 splitmix64，保留 hash 最小的 count 行（等概率均匀）。
-    let mut selected: Vec<(u64, String)> = Vec::with_capacity(args.count);
+    let mut selected: Vec<(u64, String)> = Vec::with_capacity(count);
     let mut line = String::new();
     let mut row = 0u64;
     loop {
@@ -740,8 +926,8 @@ fn audit_names(args: &AuditNamesArgs) -> Result<(), String> {
             break;
         }
         let hash = splitmix64(row);
-        let full_name = line.split(',').next().unwrap_or("").trim().to_owned();
-        if selected.len() < args.count {
+        let full_name = csv_first_field(&line);
+        if selected.len() < count {
             selected.push((hash, full_name));
             selected.sort_unstable();
         } else if let Some(last) = selected.last()
@@ -761,9 +947,9 @@ fn audit_names(args: &AuditNamesArgs) -> Result<(), String> {
             Err(error) => failures.push(json!({"full_name": full_name, "error": error})),
         }
     }
-    fs::create_dir_all(&args.out).map_err(|e| e.to_string())?;
+    fs::create_dir_all(out).map_err(|e| e.to_string())?;
     fs::write(
-        args.out.join("audit_names.json"),
+        out.join("audit_names.json"),
         serde_json::to_string_pretty(&json!({"schema_version": SCHEMA_VERSION, "records": records, "failures": failures}))
             .map_err(|e| e.to_string())?,
     )
@@ -771,7 +957,7 @@ fn audit_names(args: &AuditNamesArgs) -> Result<(), String> {
     eprintln!(
         "[clever-collect] audit-names 完成：{} 个名字 -> {}",
         records.len(),
-        args.out.join("audit_names.json").display()
+        out.join("audit_names.json").display()
     );
     Ok(())
 }
@@ -835,8 +1021,16 @@ fn load_resume_state(out: &Path, battles_per_shard: u64) -> Result<(BTreeMap<&'s
 
 fn main() {
     let cli = Cli::parse();
-    if let Some(Commands::AuditNames(args)) = cli.command {
-        if let Err(error) = audit_names(&args) {
+    if let Some(count) = cli.collect.verify_legacy {
+        if let Err(error) = verify_legacy_replay(&cli.collect.out, count, cli.collect.max_rounds, cli.collect.decisions_per_shard)
+        {
+            eprintln!("[clever-collect] verify-legacy 失败：{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    if cli.collect.audit_names {
+        if let Err(error) = audit_names(&cli.collect.names_csv, &cli.collect.out, cli.collect.audit_count) {
             eprintln!("[clever-collect] audit-names 失败：{error}");
             std::process::exit(1);
         }
