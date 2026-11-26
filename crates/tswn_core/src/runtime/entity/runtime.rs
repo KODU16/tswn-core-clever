@@ -191,6 +191,12 @@ pub struct PlayerRuntime {
     /// 沙冰鱼的运行态。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fish: Option<Box<FishRuntime>>,
+    /// 琪露诺的绝对零度概率等级。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cirno: Option<Box<CirnoRuntime>>,
+    /// Rosmontic 的回合计数、蓄力目标与一次性复活。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rosmontic: Option<Box<RosmonticRuntime>>,
     /// TigerStar 的运行态。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tiger: Option<Box<TigerRuntime>>,
@@ -282,6 +288,32 @@ impl PlayerRuntime {
             yi: (flags.contains(PlayerKindFlags::BOSS) && template.name == "咦").then(|| Box::new(YiRuntime::default())),
             tiger: (flags.contains(PlayerKindFlags::BOSS) && template.name == "TigerStar")
                 .then(|| Box::new(TigerRuntime::default())),
+            rosmontic: (flags.contains(PlayerKindFlags::BOSS)
+                && matches!(
+                    template.name.as_str(),
+                    "rin"
+                        | "megia"
+                        | "rumia"
+                        | "reimu"
+                        | "marisa"
+                        | "daiyousei"
+                        | "hong"
+                        | "koakuma"
+                        | "patchouli"
+                        | "sakuya"
+                        | "remilia"
+                        | "flandre"
+                        | "letty"
+                        | "chen"
+                        | "alice"
+                        | "phantom"
+                        | "youmu"
+                        | "yuyuko"
+                        | "ran"
+                ))
+            .then(|| Box::new(RosmonticRuntime::for_boss(&template.name))),
+            cirno: (flags.contains(PlayerKindFlags::BOSS) && template.name == crate::runtime::combat::boss::cirno::ID)
+                .then(|| Box::new(CirnoRuntime::default())),
             fish: (flags.contains(PlayerKindFlags::BOSS) && template.name == "Shabby_fish")
                 .then(|| Box::new(FishRuntime::default())),
             baixie: None,
@@ -292,13 +324,7 @@ impl PlayerRuntime {
     }
 
     /// 从标准数字 score profile 原地复位运行态，并保留保护链向量的容量。
-    pub(crate) fn reset_score_profile_from_template(
-        &mut self,
-        template: &PlayerTemplate,
-        owner: EntityIdx,
-        hp: i32,
-        alive: bool,
-    ) {
+    pub fn reset_score_profile_from_template(&mut self, template: &PlayerTemplate, owner: EntityIdx, hp: i32, alive: bool) {
         debug_assert_eq!(template.kind, PlayerTemplate::DEFAULT_KIND);
         self.hp = hp;
         self.alive = alive;
@@ -339,16 +365,24 @@ impl PlayerRuntime {
         self.rinick_reraise_lives = None;
         self.conan_thinking = None;
         self.slime_split_generation = None;
-        self.quilt_minion = None;
-        self.quilt_arrests.clear();
         self.squall = None;
         self.squall_helper = None;
         self.squall_taunt = None;
+        self.smdd = None;
+        self.xjy = None;
+        self.yi = None;
+        self.tiger = None;
+        self.fish = None;
+        self.cirno = None;
+        self.rosmontic = None;
+        self.baixie = None;
+        self.quilt_minion = None;
+        self.quilt_arrests.clear();
         self.corpse = RuntimeCorpseKind::None;
     }
 
     /// 从场前模板原地恢复运行态，并保留保护链向量已经申请的容量。
-    pub(crate) fn reset_battle_state_from(&mut self, prepared: &Self) {
+    pub fn reset_battle_state_from(&mut self, prepared: &Self) {
         self.hp = prepared.hp;
         self.alive = prepared.alive;
         self.attack = prepared.attack;
@@ -389,11 +423,19 @@ impl PlayerRuntime {
         self.rinick_reraise_lives = prepared.rinick_reraise_lives;
         self.conan_thinking = prepared.conan_thinking;
         self.slime_split_generation = prepared.slime_split_generation;
-        self.quilt_minion.clone_from(&prepared.quilt_minion);
-        self.quilt_arrests.clone_from(&prepared.quilt_arrests);
         self.squall.clone_from(&prepared.squall);
         self.squall_helper = prepared.squall_helper;
         self.squall_taunt = prepared.squall_taunt;
+        self.smdd.clone_from(&prepared.smdd);
+        self.xjy.clone_from(&prepared.xjy);
+        self.yi.clone_from(&prepared.yi);
+        self.tiger.clone_from(&prepared.tiger);
+        self.fish.clone_from(&prepared.fish);
+        self.cirno.clone_from(&prepared.cirno);
+        self.rosmontic.clone_from(&prepared.rosmontic);
+        self.baixie.clone_from(&prepared.baixie);
+        self.quilt_minion.clone_from(&prepared.quilt_minion);
+        self.quilt_arrests.clone_from(&prepared.quilt_arrests);
         self.corpse = prepared.corpse;
     }
 
@@ -436,9 +478,7 @@ impl PlayerRuntime {
             atk,
         ) as f64;
         let b = median_i32_3(randomer.r63() as i32 + 64, randomer.r63() as i32 + 64, atk + 64) as f64;
-        // 得意层各贡献 15% 攻击威力，独立于聚气。
-        let pride = self.quilt_minion.as_ref().map_or(0, |s| s.pride.len());
-        let at = a * b * self.at_boost() * (1.0 + 0.15 * pride as f64);
+        let at = a * b * self.at_boost();
         // 能力卡在攻击力之后独立乘算，不额外消耗随机流。
         #[cfg(feature = "cards")]
         let at = at * crate::runtime::forced_action::attack_multiplier(self.root_owner.0);
@@ -508,7 +548,7 @@ pub struct ChargeRuntime {
 }
 
 impl ChargeRuntime {
-    pub(crate) fn from_permanent(permanent: bool) -> Self {
+    pub fn from_permanent(permanent: bool) -> Self {
         Self {
             active: permanent,
             post_action_active: false,
@@ -568,11 +608,13 @@ impl EntityRecord {
     #[inline]
     /// 含状态修正与垂死增益的有效速度。
     pub fn effective_speed(&self) -> i32 {
-        let mut speed = self.states.effective_speed(self.template.speed);
-        // 得意的速度增益叠加，但不会创建疾走状态。
-        if let Some(s) = &self.runtime.quilt_minion {
-            speed += self.template.speed * s.pride.len() as i32 / 10;
+        // 调度器也读取专属速度变化，不能只让状态面板显示加速。
+        if self.runtime.rosmontic.as_ref().is_some_and(|s| {
+            s.stat_add[2] != 0 || s.stat_scale_bits[2] != 0 || s.divine_turns > 0 || (s.aura && self.template.name == "remilia")
+        }) {
+            return self.states.effective_speed(self.runtime.speed);
         }
+        let mut speed = self.states.effective_speed(self.template.speed);
         if self.runtime.upgrade_active {
             // 增益量独立乘算，保留原始技能等级。
             #[cfg(feature = "cards")]
@@ -634,7 +676,7 @@ impl EntityRecord {
         self.runtime.attr_sum = self.template.attr_sum;
         self.runtime.atk_sum = self.states.effective_atk_sum(self.template.atk_sum);
         self.runtime.attract_bits = self.template.attract_bits;
-        self.runtime.attract_bits = self.states.effective_attract(f64::from_bits(self.runtime.attract_bits)).to_bits();
+        self.runtime.attract_bits = self.states.effective_attract(self.runtime.attract()).to_bits();
         if self.runtime.upgrade_active {
             // 增益量独立乘算，保留原始技能等级。
             #[cfg(feature = "cards")]
@@ -648,6 +690,65 @@ impl EntityRecord {
             self.runtime.resistance += (30.0 * power).round() as i32;
             self.runtime.speed += (20.0 * power).round() as i32;
             self.runtime.wisdom += (20.0 * power).round() as i32;
+        }
+        // 出勤只维持到第二次实际行动结束，不写进永久模板。
+        if self.runtime.squall.as_ref().is_some_and(|s| s.attendance) {
+            self.runtime.defense *= 2;
+            self.runtime.resistance *= 2;
+        }
+        // 黑雾形态与月影增防属于持续修正，重建状态时仍需恢复。
+        if self.runtime.flags.contains(PlayerKindFlags::BOSS)
+            && self.template.name == "rumia"
+            && let Some(state) = &self.runtime.rosmontic
+        {
+            let multiplier = if state.rumia_destroy { 5 } else { 1 };
+            self.runtime.attack *= multiplier;
+            self.runtime.magic *= multiplier;
+            self.runtime.wisdom *= multiplier;
+            self.runtime.defense = self.runtime.defense * multiplier + state.rumia_def_bonus;
+            self.runtime.resistance = self.runtime.resistance * multiplier + state.rumia_def_bonus;
+        }
+        // 专属变化在普通状态重建后恢复，燃烧本身不会赋予行动能力。
+        let r = &mut self.runtime;
+        if let Some(s) = &r.rosmontic {
+            for (i, value) in [
+                &mut r.attack,
+                &mut r.defense,
+                &mut r.speed,
+                &mut r.agility,
+                &mut r.magic,
+                &mut r.resistance,
+                &mut r.wisdom,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let factor = if s.stat_scale_bits[i] == 0 {
+                    1.0
+                } else {
+                    f64::from_bits(s.stat_scale_bits[i])
+                };
+                *value = (f64::from(*value) * factor) as i32 + s.stat_add[i];
+            }
+            // 神现只翻倍六围，智力与 MP 不变，解除后从模板恢复。
+            if s.divine_turns > 0 {
+                r.attack *= 2;
+                r.defense *= 2;
+                r.speed *= 2;
+                r.agility *= 2;
+                r.magic *= 2;
+                r.resistance *= 2;
+            }
+            if s.aura && self.template.name == "hong" {
+                r.defense = (f64::from(r.defense) * (1.8 + if s.aura_bonus { 1.0 } else { 0.0 })) as i32;
+            }
+            if s.aura && self.template.name == "remilia" {
+                let bonus = if s.aura_bonus { 1.0 } else { 0.0 };
+                let power = 1.7 + bonus + 0.8 * f64::from(s.scarlet);
+                r.attack = (f64::from(r.attack) * power) as i32;
+                r.magic = (f64::from(r.magic) * power) as i32;
+                r.speed = (f64::from(r.speed) * (1.7 + bonus + 0.5 * f64::from(s.scarlet))) as i32;
+            }
         }
         self.refresh_runtime_at_boost();
         if let Some(level) = hide_level {
@@ -792,12 +893,6 @@ impl EntityRecord {
     pub fn clear_positive_messages(&mut self) -> Vec<(i32, &'static str)> {
         let mut messages = self.clear_positive_runtime_messages();
         messages.extend(self.clear_positive_state_messages());
-        if let Some(s) = &mut self.runtime.quilt_minion {
-            if !s.pride.is_empty() {
-                s.pride.clear();
-                messages.push((0, "[1]从[得意]中解除"));
-            }
-        }
         messages.sort_unstable_by_key(|(priority, _)| *priority);
         messages
     }
@@ -841,6 +936,22 @@ impl EntityRecord {
             .is_some_and(|(grow, _)| grow > 0)
         {
             at_boost *= 1.5;
+        }
+        // 气场的威力倍率独立于普通聚气，驱散后可恢复基底。
+        if let Some(s) = &self.runtime.rosmontic
+            && s.aura
+        {
+            let bonus = if s.aura_bonus { 1.0 } else { 0.0 };
+            if self.template.name == "hong" {
+                at_boost *= 1.8 + bonus;
+            }
+            if self.template.name == "remilia" {
+                at_boost *= 1.7 + bonus + 0.5 * f64::from(s.scarlet);
+            }
+        }
+        // 化猫额外提升威力，与速敏变化独立保存。
+        if self.runtime.rosmontic.as_ref().is_some_and(|s| s.cat) {
+            at_boost *= 2.0;
         }
         self.runtime.at_boost_bits = at_boost.to_bits();
         self.runtime.at_boost_millionths = at_boost_to_millionths(at_boost);
@@ -892,7 +1003,7 @@ impl EntityArena {
     pub fn is_empty(&self) -> bool { self.entities.is_empty() }
 
     /// 封存 prepared runner 的技能基线，后续未修改的技能表不再逐局深拷贝。
-    pub(crate) fn mark_battle_baseline(&mut self) {
+    pub fn mark_battle_baseline(&mut self) {
         for entity in self.entities.iter_mut().flatten() {
             entity.template.skills.mark_battle_baseline();
             entity.slots.mark_battle_baseline();
@@ -917,7 +1028,7 @@ impl EntityArena {
     ///
     /// 动态 profile 的模板、runtime、状态和槽位随后会在同一应用循环中覆盖或清空；
     /// 这里不提前触碰它们，避免跨两个循环重复扫描实体数据。
-    pub(crate) fn reset_score_battle_state_from(&mut self, prepared: &Self, fixed_count: usize) {
+    pub fn reset_score_battle_state_from(&mut self, prepared: &Self, fixed_count: usize) {
         self.entities.truncate(prepared.entities.len());
         if self.entities.len() < prepared.entities.len() {
             self.entities.resize_with(prepared.entities.len(), || None);

@@ -31,6 +31,12 @@ impl CombatRuntime {
         if damage <= 0 {
             return;
         }
+        // 高体力阶段的剑技受到实际伤害后中断，低体力阶段不挂中断钩子。
+        self.pcb_after_damage(target, updates);
+        self.interrupt_megia_into(target, updates);
+        self.upgrade_rumia_into(target, updates);
+        // 红温在每次真实受伤后立即触发，不等待整段连击结束。
+        self.try_squall_red(target, updates);
 
         #[derive(Debug, Clone, Copy)]
         enum PlainPostDamageSkill {
@@ -116,7 +122,7 @@ impl CombatRuntime {
                     self.drain_plain_summon_share_damage_into(target, level, damage, caster, updates);
                 }
                 PlainPostDamageSkill::WeaponDeathNote => {
-                    self.run_plain_weapon_death_note_post_damage_into(target, damage, caster);
+                    self.run_plain_weapon_death_note_post_damage(target, damage, caster);
                 }
                 PlainPostDamageSkill::WeaponXuanYue => {
                     self.run_plain_weapon_xuan_yue_post_damage_into(target, caster, updates);
@@ -259,7 +265,7 @@ impl CombatRuntime {
     }
 
     /// 0.5.5 `SklDeathNote.aD`：被命中后按闪避判定把攻击者写进死亡笔记。
-    pub fn run_plain_weapon_death_note_post_damage_into(&mut self, owner: EntityIdx, damage: i32, caster: EntityIdx) {
+    pub fn run_plain_weapon_death_note_post_damage(&mut self, owner: EntityIdx, damage: i32, caster: EntityIdx) {
         if damage <= 0 || caster == owner {
             return;
         }

@@ -1,4 +1,5 @@
 use super::*;
+// Clever 候选准备与原版行动共用正式结算入口。
 mod search;
 use crate::runtime::control::TargetWisdom;
 use crate::runtime::forced_action::ForcedFallback;
@@ -42,7 +43,8 @@ impl CombatRuntime {
     /// 推进一个最小回合并返回 outcome；没有可见内容时继续推进直到产生。
     pub fn run_minimal_round(&mut self) -> RoundOutcome { self.run_minimal_round_with_capture::<true, _>(round_outcome) }
 
-    pub(crate) fn run_minimal_round_no_capture(&mut self) -> RoundOutcome {
+    /// 搜索试算不收集展示更新，生产构建也保留此入口。
+    pub fn run_minimal_round_no_capture(&mut self) -> RoundOutcome {
         if let Some(winner) = self.world.sync_winner_from_alive_views() {
             return round_outcome(None, None, Some(winner));
         }
@@ -50,7 +52,7 @@ impl CombatRuntime {
     }
 
     /// 调用方已确认当前没有胜者；批量循环只接收本回合的胜者编号。
-    pub(crate) fn run_active_round_no_capture(&mut self) -> Option<usize> {
+    pub fn run_active_round_no_capture(&mut self) -> Option<usize> {
         self.run_minimal_round_with_capture::<false, _>(|_, _, winner| winner)
     }
 
@@ -192,6 +194,7 @@ impl CombatRuntime {
             }
             // 专属计时只在真正获得行动时推进，冰冻期间保留剪枝预告。
             self.begin_squall_action(action.actor, &mut updates);
+            self.begin_rosmontic_action(action.actor, &mut updates);
             let forced_pre_action_skill = plain_skill_pre_action.forced_skill.is_some();
             let prepared = self.prepare_plain_action(action.actor, smart, plain_skill_pre_action);
             // 卡牌兼容模式：点名的技能放不出来时引擎改用普攻，这里补一条说明战报。
@@ -283,7 +286,7 @@ impl CombatRuntime {
                     if self
                         .entities
                         .get(action.actor)
-                        .is_some_and(|e| e.template.name == crate::runtime::combat::boss_yi::BAIXIE)
+                        .is_some_and(|e| e.template.name == crate::runtime::combat::boss::yi::BAIXIE)
                     {
                         self.drain_baixie_action_into(action.actor, &mut updates);
                     } else if self.quilt_minion_kind(action.actor).is_some() {
@@ -343,6 +346,7 @@ impl CombatRuntime {
                 updates.add_newline();
             }
             self.drain_post_action_chain_into(action.actor, &mut updates);
+            self.end_rosmontic_action(action.actor, &mut updates);
             self.quilt_post_action(action.actor, &mut updates);
             if !legacy_plain_action || !self.plain_battle_has_ended() {
                 self.drain_plain_update_end_into(&mut updates);
@@ -561,11 +565,26 @@ impl CombatRuntime {
                 amount: 0,
             });
         }
+        // Rosmontic 的台词与蓄力直接进入专属行动；快照保留每个阶段。
+        if self.has_rosmontic_action(actor) {
+            self.entities.get_mut(actor).unwrap().runtime.rosmontic.as_mut().unwrap().smart = smart;
+            return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
+                selected: crate::namerena::BossActionSkill::Rosmontic,
+                targets: PreparedTargetList::new(),
+            }));
+        }
+        // 琪露诺的行动完全由专属脚本决定。
+        if self.entities.get(actor).is_some_and(|e| e.runtime.cirno.is_some()) {
+            return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
+                selected: crate::namerena::BossActionSkill::Cirno,
+                targets: PreparedTargetList::new(),
+            }));
+        }
         // 沙冰鱼的行动完全由专属脚本决定。
         if self
             .entities
             .get(actor)
-            .is_some_and(|e| e.template.name == crate::runtime::combat::boss_fish::ID)
+            .is_some_and(|e| e.template.name == crate::runtime::combat::boss::fish::ID)
         {
             return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
                 selected: crate::namerena::BossActionSkill::Fish,
@@ -576,7 +595,7 @@ impl CombatRuntime {
         if self
             .entities
             .get(actor)
-            .is_some_and(|e| e.template.name == crate::runtime::combat::boss_tiger::ID)
+            .is_some_and(|e| e.template.name == crate::runtime::combat::boss::tiger::ID)
         {
             return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
                 selected: crate::namerena::BossActionSkill::Tiger,
@@ -587,7 +606,7 @@ impl CombatRuntime {
         if self
             .entities
             .get(actor)
-            .is_some_and(|e| e.template.name == crate::runtime::combat::boss_yi::ID)
+            .is_some_and(|e| e.template.name == crate::runtime::combat::boss::yi::ID)
         {
             return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
                 selected: crate::namerena::BossActionSkill::Yi,
@@ -608,7 +627,6 @@ impl CombatRuntime {
                 targets: PreparedTargetList::new(),
             }));
         }
-
         // 外部脚本：引擎自身没有强制动作时，优先执行调用方排好的这一手。
         // 潜行→背刺这类引擎强制动作必须先走完，指令留到该单位的下一次行动。
         let engine_forced = pre_action.forced_skill.is_some();
@@ -668,13 +686,14 @@ impl CombatRuntime {
         if self
             .entities
             .get(actor)
-            .is_some_and(|e| e.template.name == crate::runtime::combat::boss_smdd::ID)
+            .is_some_and(|e| e.template.name == crate::runtime::combat::boss::smdd::ID)
         {
             return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
                 selected: crate::namerena::BossActionSkill::Smdd,
                 targets: PreparedTargetList::new(),
             }));
         }
+        // 搜索只替换候选选择，仍由原回合管线执行与结算。
         if let Some(turn) = &self.scratch.search_turn {
             // 离线采集 baseline：按原版策略选择并结算本行动，行动随机流以指定种子重置。
             // 与候选分叉（prepare_search_action 的 simulation_seed）位于同一随机边界——
@@ -832,12 +851,12 @@ impl CombatRuntime {
                 }
                 return Some(PreparedPlainAction::Conan { targets });
             }
-            if boss_name == super::boss_thanos::ID {
+            if boss_name == super::boss::thanos::ID {
                 if let Some(targets) = self.select_plain_thanos_snap_targets(actor) {
                     return Some(PreparedPlainAction::ThanosSnap { targets });
                 }
             }
-            if boss_name == super::boss_wheel::ID {
+            if boss_name == super::boss::wheel::ID {
                 // 两种选敌方式都交给生命之轮的默认行动，执行时按当时体力决定是互换还是普攻。
                 let target = self
                     .select_plain_wheel_exchange_target(actor)
@@ -1247,7 +1266,7 @@ impl CombatRuntime {
         )
     }
 
-    pub(crate) fn preview_current_action_targets(
+    pub fn preview_current_action_targets(
         &mut self,
         actor: EntityIdx,
         skill: PlannedSkill,

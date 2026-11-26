@@ -7,8 +7,9 @@
  * @typedef {import("./show-types.js").InvolvedSet} InvolvedSet
  */
 
-import { createShowPlayback } from "./show-playback.js?v=20261125rates1";
+import { createShowPlayback } from "./show-playback.js?v=20261126ui1";
 import { createRateChart } from "./show-rate-chart.js?v=20261125line1";
+import { setupBossPicker } from "./show-boss-picker.js?v=20261126grid1";
 import { setupRateWindow } from "./show-rate-window.js?v=20261125png1";
 import { createThemeControls, setupPlayerHighlight, isEditableKeyTarget, copyTextToClipboard } from "./show-ui.js?v=20261125rates1";
 import {
@@ -18,7 +19,7 @@ import {
   validateReplayInput,
 } from "./show-utils.js?v=20261125rates1";
 import { buildPlayerDetailHtml } from "./show-detail.js?v=20261125rates1";
-import { renderIdleState, statsPanelHtml } from "./show-render.js?v=20261125rates1";
+import { renderIdleState, statsPanelHtml } from "./show-render.js?v=20261126ui1";
 import {
   createReplayPlan,
   appendFrameToReplayPlan,
@@ -28,7 +29,7 @@ import {
   buildShowShareUrl,
   readStaticReplayInputFromSearch,
 } from "./show-routing.js?v=20261125rates1";
-import { ensureApi, createBattleStreamSource } from "./show-wasm.js?v=20261125rates1";
+import { ensureApi, createBattleStreamSource, normalizeStateRateRounds, loadBattleIcon } from "./show-wasm.js?v=20261126boss12";
 
 import { parseScoreTestInput, scoreCheckpointHtml } from "./show-score-test.js?v=20261125rates1";
 import { winRateTableHtml } from "./show-win-rate.js?v=20261125rates1";
@@ -89,8 +90,19 @@ const versionInfo = document.querySelector("#versionInfo");
 const coreVersionInfo = document.querySelector("#coreVersionInfo");
 /** @type {HTMLElement} */
 const modulePathInfo = document.querySelector("#modulePathInfo");
-/** @type {HTMLButtonElement} */
+/** @type {HTMLInputElement} */
 const stateRateToggle = document.querySelector("#stateRateToggle");
+/** @type {HTMLInputElement} 每场开始时捕获局数，回放不改变缓存口径。 */
+const stateRateRounds = document.querySelector("#stateRateRounds");
+stateRateRounds.addEventListener("input", () => {
+  stateRateRounds.value = stateRateRounds.value.replace(/[^0-9]/g, "");
+});
+function readStateRateRounds() {
+  const rounds = normalizeStateRateRounds(stateRateRounds.value);
+  stateRateRounds.value = String(rounds);
+  return rounds;
+}
+stateRateRounds.addEventListener("change", readStateRateRounds);
 const strategySelect = document.querySelector("#strategySelect");
 /** @type {HTMLInputElement} 评分验证需显式勾选，普通对局不读取此选项。 */
 const scoreLegacyOpponents = document.querySelector("#scoreLegacyOpponents");
@@ -108,7 +120,9 @@ bossChallenge.addEventListener("change", () => {
 strategySelect.value = new URLSearchParams(window.location.search).get("strategy") === "search" ? "search" : "legacy";
 stateRateToggle.addEventListener("change", () => {
   if (stateRateToggle.checked) strategySelect.value = "legacy";
-  if (stateRateToggle.checked && currentBattle && !currentBattle.state_rates_enabled) void startBattle();
+  // 局数未变时继续复用同场历史；重新开启且局数变化时创建新测算。
+  const rounds = readStateRateRounds();
+  if (stateRateToggle.checked && currentBattle && (!currentBattle.state_rates_enabled || currentBattle.state_rate_rounds !== rounds)) void startBattle();
   else updateStateRates();
 });
 strategySelect.addEventListener("change", () => {
@@ -308,7 +322,7 @@ function updateStateRates() {
     const badgeStyle = percent == null ? '' : ' style="--rate-hue:' + (percent * 1.2).toFixed(2) + '"';
     return '<div class="rate-team"><div>' + names + '</div><strong class="rate-value' + (percent == null ? ' is-pending' : '') + '"' + badgeStyle + '>' + (percent == null ? '等待测算' : percent.toFixed(2) + '%') + '</strong></div>';
   }).join("");
-  const summaryHtml = '<div>' + (rates ? '100% · ' + rates.rounds.toLocaleString() + ' 场' : '每步完整测算 10,000 场') + '</div>' + rows + (rates?.counts[2] ? '<small>未决 ' + rates.counts[2] + ' 场（计入总场数）</small>' : '');
+  const summaryHtml = '<div>' + (rates ? '100% · ' + rates.rounds.toLocaleString() + ' 场' : '每步完整测算 ' + currentBattle.state_rate_rounds.toLocaleString() + ' 场') + '</div>' + rows + (rates?.counts[2] ? '<small>未决 ' + rates.counts[2] + ' 场（计入总场数）</small>' : '');
   const summary = panel.querySelector(".rate-summary");
   if (summary.innerHTML !== summaryHtml) summary.innerHTML = summaryHtml;
   const inputTeams = [...teams].sort((a,b) => {
@@ -351,7 +365,7 @@ function updateStats(states) {
   updateStateRates();
   let panel = document.querySelector("#battleStats");
   if (!panel) {
-    // 回放开始时容器可能被重建，属性表就动态补在战报前面。
+    // 回放重建后仍将属性表补在标题下方，日志使用独立滚动容器。
     const rows = document.querySelector("#battleRows");
     if (!rows || !rows.parentElement) return;
     panel = document.createElement("div");
@@ -366,7 +380,10 @@ function updateStats(states) {
     return;
   }
   panel.hidden = false;
+  // 帧刷新保留名单自己的滚动位置。
+  const scrollTop = panel.scrollTop;
   panel.innerHTML = html;
+  panel.scrollTop = scrollTop;
 }
 
 /**
@@ -486,6 +503,7 @@ function setLoading(loading) {
   startBtn.disabled = loading;
   strategySelect.disabled = loading;
   stateRateToggle.disabled = loading;
+  stateRateRounds.disabled = loading;
   sampleBtn.disabled = loading;
 }
 
@@ -883,12 +901,16 @@ async function startBattle({ persistInput = true } = {}) {
   setLoading(true);
   setInputStatus("正在准备战斗...");
 
+  // 在异步加载前固定本场配置，避免同一条胜率曲线混用采样量。
+  const rateRounds = readStateRateRounds();
+  const strategy = strategySelect.value;
+  const ratesEnabled = stateRateToggle.checked;
   let source = null;
   try {
-    source = await createBattleStreamSource(battleInput, versionInfo, coreVersionInfo, modulePathInfo, { metrics: battleMetrics, strategy: strategySelect.value, stateRates: stateRateToggle.checked });
+    source = await createBattleStreamSource(battleInput, versionInfo, coreVersionInfo, modulePathInfo, { metrics: battleMetrics, strategy, stateRates: ratesEnabled, stateRateRounds: rateRounds });
     if (generation !== battleGenerationToken) { source.dispose(); return; }
     currentBattle = {
-      raw_input: source.raw_input, seed_line: source.seed_line, strategy: strategySelect.value, state_rates_enabled: stateRateToggle.checked,
+      raw_input: source.raw_input, seed_line: source.seed_line, strategy, state_rates_enabled: ratesEnabled, state_rate_rounds: rateRounds,
       players: source.players, initial_states: source.initial_states,
       frames: [], result: null, source_done: false,
       winner_ids: [], final_states: source.initial_states,
@@ -1201,7 +1223,8 @@ async function main() {
   }
 
   try {
-    await ensureApi(versionInfo, coreVersionInfo, modulePathInfo);
+    const api = await ensureApi(versionInfo, coreVersionInfo, modulePathInfo);
+    setupBossPicker(bossSelect, bossChallenge, name => loadBattleIcon(api, name + "@!"));
     if (staticInput?.ok) {
       await startBattle({ persistInput: false });
       return;

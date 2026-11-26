@@ -33,7 +33,7 @@ pub struct PreparedPlayer {
     pub skills: SkillLoadoutSpec,
     /// 0.5.5 桂月奖杯注入的常驻 `charge` 标记：存在但不提供攻击倍率、也无法解除。
     pub permanent_charge: bool,
-    pub(crate) covid_mask: bool,
+    pub covid_mask: bool,
     pub name_factor: f64,
     pub weapon_attr_bonus: [i32; 8],
     pub name_base: [u8; 128],
@@ -146,7 +146,7 @@ impl PreparedRoster {
 
 impl PreparedPlayer {
     /// Boss 的战斗名（归一化后），其余返回原名。
-    pub(crate) fn combat_name(&self) -> &str {
+    pub fn combat_name(&self) -> &str {
         if self.class == PlayerClass::Boss {
             boss_combat_name(&self.name)
         } else {
@@ -253,7 +253,7 @@ impl PreparedPlayer {
 }
 
 /// 预先计算 score profile 共用的队名 KSA 状态。
-pub(crate) fn score_profile_team_rng(team: &str) -> RC4 {
+pub fn score_profile_team_rng(team: &str) -> RC4 {
     assert!(team.len() <= TEAM_MAX_LEN, "score profile team name is too long");
     let mut key = [0u8; TEAM_MAX_LEN + 1];
     key[1..1 + team.len()].copy_from_slice(team.as_bytes());
@@ -566,6 +566,65 @@ impl PlayerBuild {
             status.hp = 487;
             status.max_hp = 487;
         }
+        // 琪露诺：从固定参考版本初始化得到的属性，速度另补行动条基值。
+        if self.class == PlayerClass::Boss && self.name == "cirno" {
+            self.name_factor = 0.0;
+            attrs = [44, 39, 54, 44, 45, 54, 63, 810];
+            status = status_from_attrs(attrs, 0.0, true);
+            status.speed = 214;
+        }
+        // 冴月麟的负攻击属性保留在有符号 status 中，避免转为 u32 后溢出。
+        if self.class == PlayerClass::Boss && matches!(self.name.as_str(), "rin" | "megia") {
+            self.name_factor = 0.0;
+            attrs = if self.name == "rin" {
+                [0, 963, 14, 963, 0, 963, 63, 1000]
+            } else {
+                [63, 63, 63, 63, 63, 63, 63, 399]
+            };
+            status = status_from_attrs(attrs, 0.0, true);
+            status.speed = attrs[2] as i32 + 160;
+            if self.name == "rin" {
+                status.attack = -26;
+                status.magic = -26;
+                status.attr_sum = 2914;
+                status.atk_sum = -2902;
+                status.all_sum = 9742;
+            }
+        }
+        // 露米娅的固定八围来自参考角色初始化。
+        if self.class == PlayerClass::Boss && self.name == "rumia" {
+            self.name_factor = 0.0;
+            attrs = [49, 64, 44, 39, 44, 64, 44, 1000];
+            status = status_from_attrs(attrs, 0.0, true);
+            status.speed = 204;
+        }
+        // 东方角色采用固定八围；行动速度保留原版 +160 基值。
+        if self.class == PlayerClass::Boss
+            && let Some(fixed) = match self.name.as_str() {
+                "reimu" => Some([44, 59, 35, 44, 54, 59, 59, 1000]),
+                "marisa" => Some([44, 39, 57, 49, 64, 54, 63, 860]),
+                "daiyousei" => Some([30, 44, 46, 49, 41, 49, 54, 1200]),
+                "hong" => Some([50, 72, 39, 49, 24, 39, 44, 1018]),
+                "koakuma" => Some([39, 44, 46, 45, 44, 76, 44, 953]),
+                "patchouli" => Some([30, 34, 36, 41, 84, 59, 83, 720]),
+                "sakuya" => Some([45, 31, 54, 78, 54, 55, 61, 780]),
+                "remilia" => Some([61, 46, 63, 44, 53, 54, 46, 1100]),
+                "flandre" => Some([83, 49, 49, 44, 34, 54, 45, 1050]),
+                "letty" => Some([27, 49, 55, 41, 62, 62, 58, 740]),
+                "chen" => Some([39, 39, 75, 68, 14, 54, 39, 820]),
+                "alice" => Some([24, 64, 59, 54, 74, 64, 83, 1200]),
+                "phantom" => Some([30, 44, 41, 44, 44, 44, 44, 1497]),
+                "youmu" => Some([51, 39, 80, 61, 34, 39, 47, 790]),
+                "yuyuko" => Some([36, 54, 49, 63, 66, 36, 60, 736]),
+                "ran" => Some([44, 44, 54, 54, 58, 62, 79, 800]),
+                _ => None,
+            }
+        {
+            self.name_factor = 0.0;
+            attrs = fixed;
+            status = status_from_attrs(attrs, 0.0, true);
+            status.speed = attrs[2] as i32 + 160;
+        }
         // 被子是后排 Boss：1000 HP、其余 100，速度同样不追加 160 点。
         if self.class == PlayerClass::Boss && self.name == "quilt" {
             self.name_factor = 0.0;
@@ -737,7 +796,7 @@ fn name_rng(team: &str, name: &str) -> RC4 {
 }
 
 /// 把 8 项属性与名字系数换算为 `PlayerStats`。
-pub(crate) fn status_from_attrs(attrs: [u32; 8], name_factor: f64, alive: bool) -> PlayerStats {
+pub fn status_from_attrs(attrs: [u32; 8], name_factor: f64, alive: bool) -> PlayerStats {
     let scale = |value: i32, factor: i32| (value as f64 * (1.0 - name_factor / factor as f64)).round() as i32;
     let attr_sum = attrs[..7].iter().sum();
     let atk_sum = (attrs[0] as i32 - attrs[1] as i32 + attrs[2] as i32 + attrs[4] as i32 - attrs[5] as i32) * 2

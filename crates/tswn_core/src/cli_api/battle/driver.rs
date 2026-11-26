@@ -5,7 +5,7 @@ use crate::runtime::{ForcedAction, PlrId, RunUpdates, RuntimeRunner, forced_acti
 
 /// 两种会话共享的逐回合驱动；展示层仍在每个空回合后更新差分快照。
 #[derive(Debug)]
-pub(super) struct BattleDriver {
+pub struct BattleDriver {
     pub runner: RuntimeRunner,
     /// cards 的能力卡快照；指令队列与暂停标记在 runtime 的 control 上，随 runner 一起回滚。
     pub forced: forced_action::ForcedState,
@@ -18,13 +18,14 @@ pub(super) struct BattleDriver {
     pub frames_emitted: usize,
     pub stop_reason: Option<BattleStopReason>,
     pub failure: Option<CliApiError>,
+    /// 可选 Clever 搜索配置，普通对局保持原版推进。
     pub search: Option<crate::runtime::search::SearchConfig>,
     max_rounds: usize,
     no_progress_rounds: usize,
 }
 
 /// 单步推进结果：本回合更新集合、回合序号与可选帧序号。
-pub(super) struct RoundStep {
+pub struct RoundStep {
     pub updates: RunUpdates,
     pub round_index: usize,
     pub frame_index: Option<usize>,
@@ -113,7 +114,7 @@ impl BattleDriver {
                     .frame
                     .map_or_else(RunUpdates::new, |frame| frame.updates)
             } else {
-                self.runner.main_round()
+                self.runner.main_round_prevalidated()
             }
         });
         if let Some(actor) = self.runner.runtime().control.awaiting() {

@@ -125,7 +125,7 @@ impl CombatRuntime {
         scored.first().map(|(target, _)| *target)
     }
 
-    pub(super) fn plain_smart_attack_score(world: &WorldArena, target: EntityIdx, runtime: &PlayerRuntime) -> f64 {
+    pub fn plain_smart_attack_score(world: &WorldArena, target: EntityIdx, runtime: &PlayerRuntime) -> f64 {
         let hp = match runtime.hp {
             ..=19 => 30.0,
             301.. => 300.0,
@@ -163,7 +163,7 @@ impl CombatRuntime {
     }
 
     #[cfg(feature = "no_debug")]
-    pub(super) fn rank_two_plain_enemy_targets(
+    pub fn rank_two_plain_enemy_targets(
         &mut self,
         candidates: [EntityIdx; 2],
         smart: bool,
@@ -197,7 +197,7 @@ impl CombatRuntime {
     }
 
     /// 保留受限技能的两个停止条件：重复抽中与抽中无效目标各自计数。
-    pub(in crate::runtime) fn select_plain_filtered_enemy_targets(
+    pub fn select_plain_filtered_enemy_targets(
         &mut self,
         actor: EntityIdx,
         smart: bool,
@@ -368,7 +368,8 @@ impl CombatRuntime {
                     crate::namerena::boss_uses_skill_attack(&entity.template.name)
                 } else {
                     self.entities.get(target).is_some_and(|target| {
-                        target.runtime.flags.contains(PlayerKindFlags::BOSS) && target.template.name == "aokiji"
+                        target.runtime.flags.contains(PlayerKindFlags::BOSS)
+                            && matches!(target.template.name.as_str(), "aokiji" | "koakuma")
                     })
                 }
             }) {
@@ -614,7 +615,7 @@ impl CombatRuntime {
     /// `T.mE()`（冰冻术/冰河时代）与 `T.oH()`（`SklAttack` 物理分支）。
     ///
     /// 伤害决策批次在进入 PRE_DEFEND 之前开启：回避预演要挂在该批次上，退出时成对关闭。
-    pub(crate) fn drain_plain_attack_with_atp_covid_kind_and_on_damage_into(
+    pub fn drain_plain_attack_with_atp_covid_kind_and_on_damage_into(
         &mut self,
         actor: EntityIdx,
         target: EntityIdx,
@@ -658,7 +659,7 @@ impl CombatRuntime {
                     if self
                         .entities
                         .get(target)
-                        .is_some_and(|e| e.template.name == crate::runtime::combat::boss_yi::ID)
+                        .is_some_and(|e| e.template.name == crate::runtime::combat::boss::yi::ID)
                     {
                         self.yi_dodge_counter(target, updates);
                     }
@@ -743,7 +744,7 @@ impl CombatRuntime {
             if self
                 .entities
                 .get(target)
-                .is_some_and(|e| e.template.name == crate::runtime::combat::boss_yi::ID)
+                .is_some_and(|e| e.template.name == crate::runtime::combat::boss::yi::ID)
             {
                 self.yi_dodge_counter(target, updates);
             }
@@ -787,7 +788,6 @@ impl CombatRuntime {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
     /// 回避判定后的普攻结算：按防御折算伤害、过 POST_DEFEND 并落地。
     pub fn drain_plain_attack_after_dodge_into(
         &mut self,
@@ -814,7 +814,17 @@ impl CombatRuntime {
                 target_runtime.defense + 64
             }
         };
-        let amount = ceil_damage_to_i32(atp / defense as f64);
+        let mut amount = ceil_damage_to_i32(atp / defense as f64);
+        // 蕾蒂也免疫带冰冻回调、但未显式标记 Ice 类型的原生攻击。
+        let kind = if self.is_rosmontic_boss(target, "letty") && on_damage == PlainAttackOnDamage::Ice {
+            DamageKind::Ice
+        } else {
+            kind
+        };
+        // 小恶魔只削弱带命中回调的攻击，空回调技能保持原伤害。
+        if self.is_rosmontic_boss(target, "koakuma") && (on_damage != PlainAttackOnDamage::None || kind != DamageKind::Default) {
+            amount = amount * 13 / 20;
+        }
         let mut defend_value = RuntimeDefendValue::Damage {
             value: amount,
             caster: actor,
@@ -931,6 +941,13 @@ impl CombatRuntime {
             self.try_covid_spread_on_damage_into(boss, target, mutation, amount, updates);
         }
         match on_damage {
+            PlainAttackOnDamage::Disperse => {
+                if amount > 0 {
+                    self.apply_disperse_hit_into(caster, target, updates);
+                }
+            }
+            PlainAttackOnDamage::RosmonticBurn => self.apply_rosmontic_burn(caster, target, amount, updates),
+            PlainAttackOnDamage::RosmonticAbsorbFifth => self.apply_absorb_on_damage(caster, (amount / 5) * 2, updates),
             PlainAttackOnDamage::None => {}
             PlainAttackOnDamage::Absorb => self.apply_absorb_on_damage(caster, amount, updates),
             PlainAttackOnDamage::Berserk => self.apply_berserk_on_damage(caster, target, amount, updates),

@@ -91,7 +91,7 @@ impl RuntimeRunner {
         prepared.new_with_seed(seed).map_err(Into::into)
     }
 
-    pub(crate) fn new_from_groups_with_options(
+    pub fn new_from_groups_with_options(
         groups: &[Vec<String>],
         seed: &[String],
         eval_rq: f64,
@@ -119,7 +119,15 @@ impl RuntimeRunner {
     }
 
     /// 推进一个主 Runtime 回合并取出可见更新。
-    pub fn main_round(&mut self) -> RunUpdates { self.run_round().frame.map_or_else(RunUpdates::new, |frame| frame.updates) }
+    pub fn main_round(&mut self) -> RunUpdates {
+        self.assert_ready();
+        self.main_round_prevalidated()
+    }
+
+    /// 调用方已检查本回合的 handler 绑定；按公开入口相同的方式提取更新。
+    pub fn main_round_prevalidated(&mut self) -> RunUpdates {
+        self.run_round_unchecked().frame.map_or_else(RunUpdates::new, |frame| frame.updates)
+    }
 
     /// 使用语言绑定统一 guard 跑到结束，返回是否产生胜者。
     pub fn run_binding_to_completion(&mut self) -> bool {
@@ -317,22 +325,58 @@ fn status_labels(entity: &EntityRecord) -> Vec<String> {
     if !entity.runtime.quilt_arrests.is_empty() {
         push_status_label(&mut labels, "逮捕");
     }
+    if let Some(s) = &entity.runtime.rosmontic {
+        // 回放直接读取随快照保存的专属计时与阶段。
+        if s.cat {
+            push_status_label(&mut labels, "化猫");
+        }
+        if s.phantom_members > 0 {
+            push_status_label(&mut labels, format!("乐团 {}人", s.phantom_members.count_ones()));
+        }
+        if s.guard == 1 {
+            push_status_label(&mut labels, "招架");
+        }
+        if s.butterfly_prepared || s.butterfly_revived {
+            push_status_label(&mut labels, format!("反魂蝶 {}", s.butterfly_turns));
+        }
+        if s.divine_turns > 0 {
+            push_status_label(&mut labels, format!("神现 {}", s.divine_turns));
+        }
+        if s.charged_skill.is_some() && matches!(entity.template.name.as_str(), "flandre" | "yuyuko") {
+            push_status_label(&mut labels, "蓄力");
+        }
+        if s.dream > 0 {
+            push_status_label(&mut labels, format!("梦想天生 {}", s.dream));
+        }
+        if s.barrier_turns > 0 {
+            push_status_label(&mut labels, format!("二重结界 {}", s.barrier_turns));
+        }
+        if s.aura {
+            push_status_label(&mut labels, "气场");
+        }
+        if s.scarlet > 0 {
+            push_status_label(&mut labels, format!("鲜红印记 {}", s.scarlet));
+        }
+        if s.time_stop > 0 {
+            push_status_label(&mut labels, "世界：时停中");
+        }
+        if s.burn_turns > 0 {
+            push_status_label(&mut labels, format!("烧伤 {}", s.burn_turns));
+        }
+        if entity.template.name == "marisa" && entity.runtime.flags.contains(PlayerKindFlags::BOSS) {
+            push_status_label(&mut labels, format!("八卦炉 {}", s.energy));
+        }
+    }
     if let Some(s) = &entity.runtime.squall {
         push_status_label(&mut labels, format!("测试样本 {}", s.samples));
-        if s.iron_until > s.turn {
-            push_status_label(&mut labels, "蓄力铁壁");
+        if s.attendance {
+            push_status_label(&mut labels, "出勤：防抗翻倍");
         }
-        if s.amplify > 0 {
-            push_status_label(&mut labels, format!("蓄势 +{}%", s.amplify));
-        }
-        if s.exposed {
-            push_status_label(&mut labels, "我错了");
+        if s.turn == 2 {
+            push_status_label(&mut labels, "正在出勤回来的路上");
         }
         if s.red {
             push_status_label(&mut labels, "红温");
-        }
-        if s.burned {
-            push_status_label(&mut labels, "烧库");
         }
     }
     if entity.runtime.squall_taunt.is_some() {
