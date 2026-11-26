@@ -871,6 +871,9 @@ pub(crate) struct SearchCandidate {
 pub(crate) struct SearchTurn {
     pub chosen: Option<usize>,
     pub simulation_seed: Option<u64>,
+    /// 离线采集 baseline 专用：不为 None 时跳过搜索候选路径，改为按原版策略
+    /// 选择并结算本行动，行动随机流以该种子重置（见 combat/round.rs）。
+    pub original_policy_seed: Option<u64>,
     pub candidates: Vec<SearchCandidate>,
     pub actor: Option<EntityIdx>,
     /// 行动前魅惑等状态解析后的有效阵营，目标和价值使用同一口径。
@@ -881,6 +884,7 @@ impl SearchTurn {
         Self {
             chosen,
             simulation_seed,
+            original_policy_seed: None,
             candidates: Vec::new(),
             actor: None,
             team: None,
@@ -1209,6 +1213,22 @@ impl CombatRuntime {
         probe.scratch.search_turn = Some(SearchTurn::new(None, None));
         probe.run_minimal_round_no_capture();
         probe.scratch.search_turn.take().unwrap_or_else(|| SearchTurn::new(None, None))
+    }
+
+    /// 离线采集用：真实决策机会预览，不改变自身状态与 RNG。
+    /// 返回 Err 时给出跳过原因（无行动者/无有效阵营/无候选——含强制行动、Boss 与不支持实体）。
+    pub(crate) fn collect_decision_preview(&self) -> Result<SearchTurn, &'static str> {
+        let turn = self.search_turn_preview();
+        if turn.actor.is_none() {
+            return Err("no-actor");
+        }
+        if turn.team.is_none() {
+            return Err("no-effective-team");
+        }
+        if turn.candidates.is_empty() {
+            return Err("no-candidates");
+        }
+        Ok(turn)
     }
 
     /// 终局直接给 ±1；未终局按 `use_nn` 选择估值路径（混合模式下筛选走启发式、终局走网络），

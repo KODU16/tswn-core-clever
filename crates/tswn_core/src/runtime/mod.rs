@@ -33,6 +33,7 @@
 //! `LegacyStep` 是当前 Runtime 内用于对齐游戏行动条的调度方式。
 
 mod batch;
+pub mod collect;
 mod combat;
 pub mod control;
 mod cqp;

@@ -675,8 +675,16 @@ impl CombatRuntime {
                 targets: PreparedTargetList::new(),
             }));
         }
-        if self.scratch.search_turn.is_some() {
-            return self.prepare_search_action(actor, smart);
+        if let Some(turn) = &self.scratch.search_turn {
+            // 离线采集 baseline：按原版策略选择并结算本行动，行动随机流以指定种子重置。
+            // 与候选分叉（prepare_search_action 的 simulation_seed）位于同一随机边界——
+            // 两者都在本入口重置 RC4，此前调度器/智慧判定/行动前钩子的消耗完全相同。
+            if let Some(seed) = turn.original_policy_seed {
+                self.scratch.search_turn = None;
+                self.rng = RC4::new(&seed.to_le_bytes(), 1);
+            } else {
+                return self.prepare_search_action(actor, smart);
+            }
         }
         #[cfg(not(feature = "no_debug"))]
         let rng_before = (self.rng.i, self.rng.j);

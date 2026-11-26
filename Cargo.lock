@@ -4504,6 +4504,7 @@ name = "tswn_core"
 version = "0.7.2"
 dependencies = [
  "clap",
+ "flate2",
  "foldhash 0.2.0",
  "js-sys",
  "mimalloc",
