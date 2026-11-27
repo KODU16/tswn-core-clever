@@ -14,6 +14,10 @@ impl CombatRuntime {
 
     /// 冴月麟不攻击；第八次行动按自我退场流程结算。
     pub fn drain_rosmontic_action_into(&mut self, actor: EntityIdx, updates: &mut RunUpdates) {
+        if self.is_return_void_actor(actor) {
+            self.drain_return_void_action_into(actor, updates);
+            return;
+        }
         if self.is_rosmontic_boss(actor, "rin") {
             let entity = self.entities.get_mut(actor).unwrap();
             let state = entity.runtime.rosmontic.as_mut().unwrap();

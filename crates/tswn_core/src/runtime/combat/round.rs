@@ -194,6 +194,7 @@ impl CombatRuntime {
             }
             // 专属计时只在真正获得行动时推进，冰冻期间保留剪枝预告。
             self.begin_squall_action(action.actor, &mut updates);
+            self.begin_return_void_action(action.actor, &mut updates);
             self.begin_rosmontic_action(action.actor, &mut updates);
             let forced_pre_action_skill = plain_skill_pre_action.forced_skill.is_some();
             let prepared = self.prepare_plain_action(action.actor, smart, plain_skill_pre_action);
@@ -346,6 +347,7 @@ impl CombatRuntime {
                 updates.add_newline();
             }
             self.drain_post_action_chain_into(action.actor, &mut updates);
+            self.end_return_void_action(action.actor);
             self.end_rosmontic_action(action.actor, &mut updates);
             self.quilt_post_action(action.actor, &mut updates);
             if !legacy_plain_action || !self.plain_battle_has_ended() {
@@ -556,6 +558,13 @@ impl CombatRuntime {
         pre_action: PlainSkillPreActionOutcome,
     ) -> Option<PreparedPlainAction> {
         crate::runtime::forced_action::hit();
+        // 涵虚及菜不进入普通熟练度抽签，菜也不执行普攻。
+        if self.is_return_void_actor(actor) {
+            return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
+                selected: crate::namerena::BossActionSkill::Rosmontic,
+                targets: PreparedTargetList::new(),
+            }));
+        }
         // 专属行动不退化为普攻；本体自加的狂暴例外，沿原生强制攻击与倒计时执行。
         if self.is_rc_actor(actor) && !(self.is_rc_boss(actor) && self.has_plain_berserk_state(actor)) {
             return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {

@@ -920,7 +920,8 @@ impl CombatRuntime {
         updates: &mut RunUpdates,
     ) -> bool {
         // 被子衍生物在睡5觉/钻被/猴儿冰冻期间固定 0 伤。
-        let amount = self.quilt_damage(target, amount);
+        // 涵虚减伤进入所有实际扣血入口。
+        let amount = self.return_void_damage(caster, target, self.quilt_damage(target, amount));
         // 0.5.5 `aF`：负数伤害表示 Boss 防御吸收，只回血并输出恢复消息，
         // 不触发 covid/lazy 扩散、命中回调或 POST_DAMAGE 链。
         if amount < 0 {
@@ -944,6 +945,7 @@ impl CombatRuntime {
             self.record_tiger_damage(target, actual_damage);
         }
         updates.add_with(|| RuntimeFrame::legacy_damage_update(caster.0 as usize, target.0 as usize, amount));
+        self.return_void_after_damage(caster, target, actual_damage, updates);
         self.relay_quilt_damage(caster, target, amount, updates);
         if amount == 0 {
             return false;

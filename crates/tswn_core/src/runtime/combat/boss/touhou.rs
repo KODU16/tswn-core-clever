@@ -9,7 +9,8 @@ impl CombatRuntime {
                 || (e.runtime.flags.contains(PlayerKindFlags::BOSS)
                     && matches!(
                         e.template.name.as_str(),
-                        "rin"
+                        "ReturnVoid"
+                            | "rin"
                             | "megia"
                             | "rumia"
                             | "reimu"
@@ -230,6 +231,9 @@ impl CombatRuntime {
     }
 
     pub(super) fn ros_immune(&mut self, target: EntityIdx, key: &str) -> bool {
+        if matches!(key, "assassinate" | "disperse") && self.rv_immune(target) {
+            return true;
+        }
         if self.remaining_child_immune(target, key) {
             return true;
         }

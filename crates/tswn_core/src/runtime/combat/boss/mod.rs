@@ -14,10 +14,14 @@ pub mod mario;
 pub mod quilt;
 #[cfg(test)]
 pub mod quilt_tests;
+// 涵虚状态与技能独立实现，伤害钩子接入共用链。
 pub mod rc;
 #[cfg(test)]
 mod rc_tests;
 mod reimu_marisa;
+mod return_void;
+#[cfg(test)]
+mod return_void_tests;
 pub mod rosmontic;
 #[cfg(test)]
 mod rosmontic_tests;

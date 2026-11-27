@@ -291,7 +291,8 @@ impl PlayerRuntime {
             rosmontic: (flags.contains(PlayerKindFlags::BOSS)
                 && matches!(
                     template.name.as_str(),
-                    "rin"
+                    "ReturnVoid"
+                        | "rin"
                         | "megia"
                         | "rumia"
                         | "reimu"
@@ -626,7 +627,11 @@ impl EntityRecord {
     pub fn effective_speed(&self) -> i32 {
         // 调度器也读取专属速度变化，不能只让状态面板显示加速。
         if self.runtime.rosmontic.as_ref().is_some_and(|s| {
-            s.stat_add[2] != 0 || s.stat_scale_bits[2] != 0 || s.divine_turns > 0 || (s.aura && self.template.name == "remilia")
+            s.rv_loss > 0
+                || s.stat_add[2] != 0
+                || s.stat_scale_bits[2] != 0
+                || s.divine_turns > 0
+                || (s.aura && self.template.name == "remilia")
         }) {
             return self.states.effective_speed(self.runtime.speed);
         }
@@ -746,6 +751,23 @@ impl EntityRecord {
                 };
                 let base = if s.zero_stat_mask & (1 << i) != 0 { 0 } else { *value };
                 *value = (f64::from(base) * factor) as i32 + s.stat_add[i];
+                // 涵虚以模板重算，临时状态到期不会累积舍入或丢失永久受伤层数。
+                if self.template.name == "ReturnVoid" && r.flags.contains(PlayerKindFlags::BOSS) {
+                    let layers = s.rv_loss.saturating_mul(10) / self.template.max_hp.max(1) as u64;
+                    if i == 0 || i == 2 {
+                        let offset = if i == 2 { 160 } else { 0 };
+                        *value = ((f64::from(*value - offset)) * (1.0 + layers as f64 * 0.05)) as i32 + offset;
+                    }
+                    if matches!(i, 0 | 3 | 4) && s.rv_mode_turns > 0 {
+                        *value = (f64::from(*value) * if s.rv_mode == 1 { 1.5 } else { 0.8 }) as i32;
+                    }
+                    if s.rv_face_bonus && ((!s.rv_back && i == 0) || (s.rv_back && i == 4)) {
+                        *value = value.saturating_add(30);
+                    }
+                    if i == 3 && s.rv_dodge_turns > 0 {
+                        *value = value.saturating_add(50);
+                    }
+                }
                 // RC 的两回合增益按外显属性乘 1.2，速度先移除行动条偏移。
                 if s.rc_boost_turns > 0 {
                     let offset = if i == 2 { -124 } else { 36 };

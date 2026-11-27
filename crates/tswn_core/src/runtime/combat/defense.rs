@@ -18,6 +18,9 @@ enum PlainBossDefend {
 impl CombatRuntime {
     /// 驱散命中：清除目标正面状态并按档位扣除 MP。
     pub fn apply_disperse_hit_into(&mut self, caster: EntityIdx, target: EntityIdx, updates: &mut RunUpdates) {
+        if self.rv_immune(target) {
+            return;
+        }
         // 净化也能解除科研 Boss 的铁壁、蓄势、剪枝与嘲讽交换。
         self.dispel_squall_effects(target, updates);
         self.dispel_rosmontic_into(target, updates);
@@ -701,6 +704,10 @@ impl CombatRuntime {
 
     /// 执行目标的死亡 hook：护身符、史莱姆分裂、马里奥复活等。
     pub fn drain_die_hooks_into(&mut self, target: EntityIdx, updates: &mut RunUpdates) {
+        // 确定次数护符先于随机死亡钩子消耗。
+        if self.rv_reraise(target, updates) {
+            return;
+        }
         // 反魂蝶先恢复生命，式神死亡返还只执行一次。
         if self.remaining_revive(target, updates) {
             return;
@@ -784,7 +791,8 @@ impl CombatRuntime {
         fire_state_key: Option<u32>,
         updates: &mut RunUpdates,
     ) -> bool {
-        let amount = self.quilt_damage(target, amount);
+        // 涵虚减伤进入所有实际扣血入口。
+        let amount = self.return_void_damage(caster, target, self.quilt_damage(target, amount));
         if amount < 0 {
             self.apply_plain_absorb_heal_into(caster, target, amount.saturating_neg(), updates);
             return false;
@@ -799,6 +807,7 @@ impl CombatRuntime {
         let survived_hit = target_entity.runtime.hp > 0;
         self.record_squall_damage(caster, target, actual_damage);
         updates.add_with(|| RuntimeFrame::legacy_damage_update(caster.0 as usize, target.0 as usize, amount));
+        self.return_void_after_damage(caster, target, actual_damage, updates);
         self.relay_quilt_damage(caster, target, amount, updates);
         // 原版 damage 先调用命中回调（含火球免疫随机数），再由 onDamaged 登记反击。
         if amount > 0
@@ -827,7 +836,8 @@ impl CombatRuntime {
         updates: &mut RunUpdates,
         replay: fn(usize, usize, i32) -> crate::runtime::update::RunUpdate,
     ) -> bool {
-        let amount = self.quilt_damage(target, amount);
+        // 涵虚减伤进入所有实际扣血入口。
+        let amount = self.return_void_damage(caster, target, self.quilt_damage(target, amount));
         let Some(target_entity) = self.entities.get_mut(target) else {
             panic!("unknown runtime damage target entity: {}", target.0);
         };
@@ -840,6 +850,7 @@ impl CombatRuntime {
         let team = target_entity.runtime.team;
         self.record_squall_damage(caster, target, actual_damage);
         updates.add(replay(caster.0 as usize, target.0 as usize, amount));
+        self.return_void_after_damage(caster, target, actual_damage, updates);
         self.relay_quilt_damage(caster, target, amount, updates);
         self.drain_plain_post_damage_skill_chain_into(target, amount, caster, updates);
         if killed {
@@ -856,7 +867,8 @@ impl CombatRuntime {
         amount: i32,
         updates: &mut RunUpdates,
     ) -> bool {
-        let amount = self.quilt_damage(target, amount);
+        // 涵虚减伤进入所有实际扣血入口。
+        let amount = self.return_void_damage(caster, target, self.quilt_damage(target, amount));
         let target_entity = self
             .entities
             .get_mut(target)
@@ -866,6 +878,7 @@ impl CombatRuntime {
         let was_alive = target_entity.runtime.alive;
         self.record_squall_damage(caster, target, actual_damage);
         updates.add_with(|| RuntimeFrame::legacy_damage_update(caster.0 as usize, target.0 as usize, amount));
+        self.return_void_after_damage(caster, target, actual_damage, updates);
         self.relay_quilt_damage(caster, target, amount, updates);
         self.drain_plain_post_damage_skill_chain_into(target, amount, caster, updates);
         was_alive
@@ -883,7 +896,12 @@ impl CombatRuntime {
         amount: i32,
         updates: &mut RunUpdates,
     ) -> bool {
-        let amount = self.quilt_damage(target, amount);
+        // 回避净化也回避该次伤害。
+        if self.rv_immune(target) {
+            return false;
+        }
+        // 涵虚减伤进入所有实际扣血入口。
+        let amount = self.return_void_damage(caster, target, self.quilt_damage(target, amount));
         if amount < 0 {
             self.apply_plain_absorb_heal_into(caster, target, amount.saturating_neg(), updates);
             return false;
@@ -900,6 +918,7 @@ impl CombatRuntime {
         if amount > 0 {
             self.apply_disperse_hit_into(caster, target, updates);
         }
+        self.return_void_after_damage(caster, target, actual_damage, updates);
         self.relay_quilt_damage(caster, target, amount, updates);
         self.drain_plain_post_damage_skill_chain_into(target, amount, caster, updates);
         // 火球与净化走独立扣血入口，同样只让存活的小在实际受伤后反雷。
@@ -1112,6 +1131,10 @@ impl CombatRuntime {
 
     /// 目标对指定状态是否免疫：Boss 与加成角色按阈值判定。
     pub fn status_immune(&mut self, target: EntityIdx, status: &'static str) -> bool {
+        // 专属回避确定免疫净化和背刺。
+        if matches!(status, "assassinate" | "disperse") && self.rv_immune(target) {
+            return true;
+        }
         if self.remaining_child_immune(target, status) {
             return true;
         }

@@ -4,7 +4,8 @@
 pub const SAITAMA_RETIREMENT_WINNER: &str = "SAITAMA";
 
 /// 内置 Boss 名字表；用于身份分类、默认技能与免疫规则查询。
-pub const BOSS_NAMES: [&str; 53] = [
+pub const BOSS_NAMES: [&str; 54] = [
+    "ReturnVoid",
     "rc",
     "mario",
     "sonic",
@@ -121,6 +122,10 @@ pub fn boss_squad_balance(name: &str) -> Option<BossSquadBalance> {
 
 /// Boss 的中文展示名；未知名按原名返回。
 pub fn boss_display_name(name: &str) -> &str {
+    // 外显名字独立于挑战身份。
+    if name == "ReturnVoid" {
+        return "涵虚";
+    }
     // 只归一化隐藏备份，保留既有大写身份的展示约定。
     let display_key = if name.ends_with('_') { boss_combat_name(name) } else { name };
     match display_key {
@@ -262,6 +267,7 @@ pub enum BossActionSkill {
 /// 马里奥的火球术初始等级为 0，吃到火焰花后由状态载荷改写为 120。
 pub fn boss_action_skills(name: &str) -> &'static [(BossActionSkill, u32)] {
     match boss_combat_name(name) {
+        "ReturnVoid" => &[(BossActionSkill::Rosmontic, 256)],
         "rc" => &[(BossActionSkill::Rc, 256)],
         "aokiji" => &[(BossActionSkill::IceAge, 70), (BossActionSkill::Ice, 80)],
         "ikaruga" => &[(BossActionSkill::IkarugaAttack, 48)],

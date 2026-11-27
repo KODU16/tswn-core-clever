@@ -28,10 +28,10 @@ import {
 import {
   buildShowShareUrl,
   readStaticReplayInputFromSearch,
-} from "./show-routing.js?v=20261127reserve1";
-import { ensureApi, createBattleStreamSource, normalizeStateRateRounds, loadBattleIcon } from "./show-wasm.js?v=20261127reserve1";
+} from "./show-routing.js?v=20261127returnvoid1";
+import { ensureApi, createBattleStreamSource, normalizeStateRateRounds, loadBattleIcon } from "./show-wasm.js?v=20261127returnvoid1";
 
-import { parseScoreTestInput, scoreCheckpointHtml } from "./show-score-test.js?v=20261127reserve1";
+import { parseScoreTestInput, scoreCheckpointHtml } from "./show-score-test.js?v=20261127returnvoid1";
 import { winRateTableHtml } from "./show-win-rate.js?v=20261125rates1";
 
 import { BattleStreamController } from "./show-stream.js?v=20261125rates1";
@@ -843,7 +843,7 @@ function startScoreTest(input, { persistInput }) {
     setInputStatus(message, failed);
   }
   try {
-    worker = new Worker(new URL("./show-score-worker.js?v=20261127reserve1", import.meta.url), { type: "module" });
+    worker = new Worker(new URL("./show-score-worker.js?v=20261127returnvoid1", import.meta.url), { type: "module" });
     scoreWorker = worker;
     cancel.onclick = () => finish("评分已停止；保留已完成的检查点。");
     worker.onmessage = ({ data }) => {

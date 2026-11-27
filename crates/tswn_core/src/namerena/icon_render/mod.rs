@@ -266,6 +266,8 @@ pub fn render_icon_vec_from_name(name: &str) -> Vec<u8> {
             "smdd" => Some("nan@nan"),
             // RC 只替换徽章，不改变其战斗身份和属性来源。
             "rc" => Some("RbCl@RbCl"),
+            // 涵虚图标使用指定的完整名字生成。
+            "ReturnVoid" => Some("涵虚@涵虚"),
             "新纪元" => Some("新纪元@新纪元"),
             "Shabby_fish" => Some("Shabby_fish@Shabby_fish"),
             _ => None,

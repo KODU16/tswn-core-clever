@@ -546,7 +546,7 @@ impl PlayerBuild {
         if self.class == PlayerClass::Boss
             && matches!(
                 self.name.as_str(),
-                "Squall" | "smdd" | "新纪元" | "TigerStar" | "Shabby_fish" | "rc"
+                "Squall" | "smdd" | "新纪元" | "TigerStar" | "Shabby_fish" | "rc" | "ReturnVoid"
             )
         {
             self.name_factor = 0.0;

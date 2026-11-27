@@ -4,6 +4,18 @@ use super::EntityIdx;
 #[serde(default)]
 pub struct RosmonticRuntime {
     pub actions: u32,
+    /// 涵虚的累计失血、翻面和临时状态随快照保存，菜只使用倒计时。
+    pub rv_loss: u64,
+    pub rv_inequalities: u32,
+    pub rv_back: bool,
+    pub rv_face_bonus: bool,
+    pub rv_mode: u8,
+    pub rv_mode_turns: u8,
+    pub rv_dodge_turns: u8,
+    pub rv_charms: u32,
+    pub rv_reflect: bool,
+    pub rv_reflect_chain: bool,
+    pub rv_vegetable_turns: u8,
     /// RC 观察层数永久保留，独立于可驱散状态；增益计时按本体行动结算。
     pub rc_observations: u64,
     pub rc_boost_turns: u8,
