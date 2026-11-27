@@ -238,7 +238,11 @@ fn rc_second_observation_transforms_hp_stats_and_big_action_sequence() {
     rt.entities.get_mut(a).unwrap().refresh_runtime_stats_from_template();
     assert_eq!(visible(rt, a), [72; 7]);
     assert_eq!(rt.ros_state(a).rc_observations, 2);
-    assert!(u.updates.iter().any(|x| matches!(x.message.as_ref(), "还是大了" | "我觉得大了")));
+    assert!(
+        u.updates
+            .iter()
+            .any(|x| matches!(x.message.as_ref(), "还是大了" | "我觉得大了" | "其实我不太欣赏的来小"))
+    );
     let mut u = RunUpdates::new();
     rt.apply_plain_attack_damage_with_covid_and_on_damage_into(enemy, a, 1, None, PlainAttackOnDamage::None, &mut u);
     assert_eq!(thunder_count(&u), 0);

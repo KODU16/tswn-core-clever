@@ -1,0 +1,687 @@
+{
+  "dataset": {
+    "decisions": 16724,
+    "actions": 191182,
+    "battles": 4000,
+    "audited_names": 15593,
+    "rosters": 3999,
+    "cross_split_name_overlap": 0,
+    "duplicate_states": 0,
+    "pilot": "excluded: only 64 rollouts, retained untouched",
+    "features": "mechanism-summary-trial-v1",
+    "state_width": 1318,
+    "action_width": 327,
+    "max_candidates": 58,
+    "limitations": [
+      "actor snapshot updated; other actors remain at clean boundary",
+      "manifest engine_commit unknown; archived README is not exact provenance",
+      "paired seed alignment follows exported protocol, not independent replay"
+    ]
+  },
+  "comparison": {
+    "design": {
+      "seeds": [
+        20261127,
+        20261128,
+        20261129
+      ],
+      "max_epochs": 40,
+      "prepared_sha256": "0d347141c583fc3939b4471f2ffb699e37cd91da541c5379ab0bc300826afd2c",
+      "trainer_sha256": "b9e361d909c27a756f5dca229e51da88403eed5f9c856db6adfa8dc5a8c10817",
+      "strategies": {
+        "mixed": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "single": [
+          1
+        ],
+        "multi": [
+          2,
+          3,
+          4
+        ]
+      },
+      "selection": "validation selected advantage; patience 10; all seeds reported"
+    },
+    "splits_by_team_size": {
+      "train": {
+        "1": 3732,
+        "2": 4440,
+        "3": 3180,
+        "4": 2040
+      },
+      "validation": {
+        "1": 714,
+        "2": 300,
+        "3": 652,
+        "4": 0
+      },
+      "test": {
+        "1": 217,
+        "2": 812,
+        "3": 129,
+        "4": 508
+      }
+    },
+    "validation": {
+      "all": {
+        "decisions": 1666,
+        "battles": 400,
+        "mixed_gain": 0.09781255573034286,
+        "expert_gain": 0.09643232292917167,
+        "uniform_gain": -0.0005646379229035602,
+        "mixed_gain_ci95": [
+          0.0926657303863578,
+          0.10301868018047632
+        ],
+        "expert_gain_ci95": [
+          0.09120321611145164,
+          0.10185423163719763
+        ],
+        "expert_minus_mixed": -0.0013802396700245698,
+        "expert_minus_mixed_ci95": [
+          -0.0026409580666476398,
+          -8.709157562267261e-05
+        ],
+        "mixed_gain_by_seed": [
+          0.09775472432374954,
+          0.09775003790855408,
+          0.09793291985988617
+        ],
+        "expert_gain_by_seed": [
+          0.09700208208283313,
+          0.09665975765306123,
+          0.09563512905162065
+        ]
+      },
+      "single": {
+        "decisions": 714,
+        "battles": 183,
+        "mixed_gain": 0.09808845072984695,
+        "expert_gain": 0.0947311216153128,
+        "uniform_gain": 0.003197843807661954,
+        "mixed_gain_ci95": [
+          0.09000476867964262,
+          0.10684304915547468
+        ],
+        "expert_gain_ci95": [
+          0.08632171258218092,
+          0.10353239197036333
+        ],
+        "expert_minus_mixed": -0.003357332563134264,
+        "expert_minus_mixed_ci95": [
+          -0.005655999143307107,
+          -0.0011310729121319072
+        ],
+        "mixed_gain_by_seed": [
+          0.09720763564109802,
+          0.09885438531637192,
+          0.09820334613323212
+        ],
+        "expert_gain_by_seed": [
+          0.09481683298319328,
+          0.09445575105042017,
+          0.09492078081232493
+        ]
+      },
+      "multi": {
+        "decisions": 952,
+        "battles": 217,
+        "mixed_gain": 0.0976056456565857,
+        "expert_gain": 0.09770822391456582,
+        "uniform_gain": -0.003386499220827696,
+        "mixed_gain_ci95": [
+          0.09137874068027226,
+          0.10418457924608536
+        ],
+        "expert_gain_ci95": [
+          0.09143545576846494,
+          0.10425387751131864
+        ],
+        "expert_minus_mixed": 0.00010257999980770036,
+        "expert_minus_mixed_ci95": [
+          -0.0013605146154684854,
+          0.0015119477631916481
+        ],
+        "mixed_gain_by_seed": [
+          0.09816505014896393,
+          0.09692177921533585,
+          0.0977301076054573
+        ],
+        "expert_gain_by_seed": [
+          0.09864101890756302,
+          0.09831276260504201,
+          0.09617089023109243
+        ]
+      },
+      "1v1": {
+        "decisions": 714,
+        "battles": 183,
+        "mixed_gain": 0.09808845072984695,
+        "expert_gain": 0.0947311216153128,
+        "uniform_gain": 0.003197843807661954,
+        "mixed_gain_ci95": [
+          0.09000476867964262,
+          0.10684304915547468
+        ],
+        "expert_gain_ci95": [
+          0.08632171258218092,
+          0.10353239197036333
+        ],
+        "expert_minus_mixed": -0.003357332563134264,
+        "expert_minus_mixed_ci95": [
+          -0.005655999143307107,
+          -0.0011310729121319072
+        ],
+        "mixed_gain_by_seed": [
+          0.09720763564109802,
+          0.09885438531637192,
+          0.09820334613323212
+        ],
+        "expert_gain_by_seed": [
+          0.09481683298319328,
+          0.09445575105042017,
+          0.09492078081232493
+        ]
+      },
+      "2v2": {
+        "decisions": 300,
+        "battles": 75,
+        "mixed_gain": 0.09864149987697601,
+        "expert_gain": 0.09766927083333334,
+        "uniform_gain": 0.0013714356779432728,
+        "mixed_gain_ci95": [
+          0.08843739176110829,
+          0.10954535618126586
+        ],
+        "expert_gain_ci95": [
+          0.08780349392361113,
+          0.10817784288194443
+        ],
+        "expert_minus_mixed": -0.0009722224234913783,
+        "expert_minus_mixed_ci95": [
+          -0.0036937937561015133,
+          0.0017361108894272347
+        ],
+        "mixed_gain_by_seed": [
+          0.09889323264360428,
+          0.10023437440395355,
+          0.09679687768220901
+        ],
+        "expert_gain_by_seed": [
+          0.09736979166666666,
+          0.0984375,
+          0.09720052083333333
+        ]
+      },
+      "3v3": {
+        "decisions": 652,
+        "battles": 142,
+        "mixed_gain": 0.09712902456521988,
+        "expert_gain": 0.09772614711145194,
+        "uniform_gain": -0.005575733069955442,
+        "mixed_gain_ci95": [
+          0.08952433212720086,
+          0.10482047219466382
+        ],
+        "expert_gain_ci95": [
+          0.09004725242496082,
+          0.10547468677274685
+        ],
+        "expert_minus_mixed": 0.0005971209921232277,
+        "expert_minus_mixed_ci95": [
+          -0.0010681140274037156,
+          0.0022552554029021702
+        ],
+        "mixed_gain_by_seed": [
+          0.09782999753952026,
+          0.09539757668972015,
+          0.09815950691699982
+        ],
+        "expert_gain_by_seed": [
+          0.09922593941717792,
+          0.0982553680981595,
+          0.0956971338190184
+        ]
+      }
+    },
+    "test": {
+      "all": {
+        "decisions": 1666,
+        "battles": 400,
+        "mixed_gain": 0.09342564642429352,
+        "expert_gain": 0.09399150285114045,
+        "uniform_gain": -0.0051646929924337665,
+        "mixed_gain_ci95": [
+          0.08848111097921793,
+          0.09842568480347036
+        ],
+        "expert_gain_ci95": [
+          0.08909006649778328,
+          0.09895839226890968
+        ],
+        "expert_minus_mixed": 0.0005658512783688488,
+        "expert_minus_mixed_ci95": [
+          -0.0006168789739950865,
+          0.0017338849758913725
+        ],
+        "mixed_gain_by_seed": [
+          0.09355304390192032,
+          0.09339360892772675,
+          0.09333030134439468
+        ],
+        "expert_gain_by_seed": [
+          0.09290356767707082,
+          0.09500675270108043,
+          0.09406418817527011
+        ]
+      },
+      "single": {
+        "decisions": 217,
+        "battles": 55,
+        "mixed_gain": 0.07746495306491852,
+        "expert_gain": 0.07648089477726575,
+        "uniform_gain": -0.009010326011514089,
+        "mixed_gain_ci95": [
+          0.06424123519030184,
+          0.09172446943420229
+        ],
+        "expert_gain_ci95": [
+          0.06301082932186447,
+          0.09036596526139938
+        ],
+        "expert_minus_mixed": -0.0009840630601444917,
+        "expert_minus_mixed_ci95": [
+          -0.004983551135185271,
+          0.0031226189921074576
+        ],
+        "mixed_gain_by_seed": [
+          0.07852102816104889,
+          0.078125,
+          0.07574884593486786
+        ],
+        "expert_gain_by_seed": [
+          0.07659490207373272,
+          0.07747695852534563,
+          0.07537082373271889
+        ]
+      },
+      "multi": {
+        "decisions": 1449,
+        "battles": 345,
+        "mixed_gain": 0.09581590443849564,
+        "expert_gain": 0.09661386444674487,
+        "uniform_gain": -0.004588776936436231,
+        "mixed_gain_ci95": [
+          0.09041739583376854,
+          0.10116371035787892
+        ],
+        "expert_gain_ci95": [
+          0.0911019314847126,
+          0.10180844823097099
+        ],
+        "expert_minus_mixed": 0.0007979640537017645,
+        "expert_minus_mixed_ci95": [
+          -0.00038652049665269716,
+          0.0019482072356530192
+        ],
+        "mixed_gain_by_seed": [
+          0.09580422192811966,
+          0.09568020701408386,
+          0.09596326947212219
+        ],
+        "expert_gain_by_seed": [
+          0.09534592822636301,
+          0.09763198757763975,
+          0.09686367753623189
+        ]
+      },
+      "1v1": {
+        "decisions": 217,
+        "battles": 55,
+        "mixed_gain": 0.07746495306491852,
+        "expert_gain": 0.07648089477726575,
+        "uniform_gain": -0.009010326011514089,
+        "mixed_gain_ci95": [
+          0.06424123519030184,
+          0.09172446943420229
+        ],
+        "expert_gain_ci95": [
+          0.06301082932186447,
+          0.09036596526139938
+        ],
+        "expert_minus_mixed": -0.0009840630601444917,
+        "expert_minus_mixed_ci95": [
+          -0.004983551135185271,
+          0.0031226189921074576
+        ],
+        "mixed_gain_by_seed": [
+          0.07852102816104889,
+          0.078125,
+          0.07574884593486786
+        ],
+        "expert_gain_by_seed": [
+          0.07659490207373272,
+          0.07747695852534563,
+          0.07537082373271889
+        ]
+      },
+      "2v2": {
+        "decisions": 812,
+        "battles": 203,
+        "mixed_gain": 0.10531802475452423,
+        "expert_gain": 0.10650785098522167,
+        "uniform_gain": -0.0027269994241101727,
+        "mixed_gain_ci95": [
+          0.09810664732738344,
+          0.11230156068041235
+        ],
+        "expert_gain_ci95": [
+          0.09944328721520937,
+          0.11343911958641213
+        ],
+        "expert_minus_mixed": 0.0011898347455033288,
+        "expert_minus_mixed_ci95": [
+          -0.0003527811871655078,
+          0.002735898392951677
+        ],
+        "mixed_gain_by_seed": [
+          0.1057814434170723,
+          0.10551204532384872,
+          0.10466056317090988
+        ],
+        "expert_gain_by_seed": [
+          0.1051704895320197,
+          0.10774899938423645,
+          0.10660406403940886
+        ]
+      },
+      "3v3": {
+        "decisions": 129,
+        "battles": 15,
+        "mixed_gain": 0.06400395184755325,
+        "expert_gain": 0.06463985788113696,
+        "uniform_gain": -0.006584598936840963,
+        "mixed_gain_ci95": [
+          0.04670597779187519,
+          0.08089098307260337
+        ],
+        "expert_gain_ci95": [
+          0.04715257532456343,
+          0.08226403659771783
+        ],
+        "expert_minus_mixed": 0.0006359009067973153,
+        "expert_minus_mixed_ci95": [
+          -0.003908041996113346,
+          0.005019759414894563
+        ],
+        "mixed_gain_by_seed": [
+          0.06286337226629257,
+          0.06392320990562439,
+          0.06522528827190399
+        ],
+        "expert_gain_by_seed": [
+          0.0635295542635659,
+          0.06237887596899225,
+          0.06801114341085271
+        ]
+      },
+      "4v4": {
+        "decisions": 508,
+        "battles": 127,
+        "mixed_gain": 0.08870571106672287,
+        "expert_gain": 0.08891845062335958,
+        "uniform_gain": -0.007057875956035736,
+        "mixed_gain_ci95": [
+          0.08124673214169746,
+          0.09656473002664646
+        ],
+        "expert_gain_ci95": [
+          0.08132843257874015,
+          0.09662118346046587
+        ],
+        "expert_minus_mixed": 0.0002127418966305117,
+        "expert_minus_mixed_ci95": [
+          -0.0017715253596413474,
+          0.0021914985143714595
+        ],
+        "mixed_gain_by_seed": [
+          0.08822127431631088,
+          0.08802903443574905,
+          0.08986681699752808
+        ],
+        "expert_gain_by_seed": [
+          0.08772145669291338,
+          0.09041277066929133,
+          0.08862112450787402
+        ]
+      }
+    }
+  },
+  "continuation": {
+    "stop_reason": "user requested immediate stop after clear overfitting",
+    "recorded_training_seconds": 180.72609281539917,
+    "continued_epochs": 236,
+    "first": {
+      "epoch": 16,
+      "loss": 2.709353733062744,
+      "validation_selected_gain": 0.09708180278539658,
+      "validation_probability_mse": 0.016262054443359375,
+      "learning_rate": 9.999999012322797e-05,
+      "elapsed_seconds": 0.9086771011352539
+    },
+    "last": {
+      "epoch": 251,
+      "loss": 2.6554499421800886,
+      "validation_selected_gain": 0.09515681117773056,
+      "validation_probability_mse": 0.018309788778424263,
+      "learning_rate": 7.997884929493127e-05,
+      "elapsed_seconds": 180.72609281539917
+    },
+    "initial_validation_gain": 0.09793291985988617,
+    "initial_validation_probability_mse": 0.01631011813879013,
+    "best_new_validation_gain": 0.0973842665553093,
+    "best_weight_equals_initial": true,
+    "best_epoch": 15,
+    "new_automatic_rule_first_trigger_on_logged_data": {
+      "epoch": 33,
+      "loss": 2.69340238571167,
+      "validation_selected_gain": 0.09608765691518784,
+      "validation_probability_mse": 0.01670779474079609,
+      "learning_rate": 9.96649396139997e-05,
+      "elapsed_seconds": 22.87979292869568
+    },
+    "expert_checkpoints_remaining": []
+  },
+  "verified_best": {
+    "seed": 20261129,
+    "team_sizes": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "training_decisions": 13392,
+    "evaluate_only": true,
+    "stop_reason": "evaluation_only",
+    "resume_checkpoint": "crates\\nn_handoff\\clever-gpu-trial-20261127\\mixed-10min\\best.pt",
+    "resume_sha256": "89c11a699c42c95473a02e93251baf3140a5c7349897e5ae06e23a59f72dc200",
+    "resumed_epoch": 15,
+    "initial_validation_selected_gain": 0.09793291985988617,
+    "requested_minutes": 0,
+    "last_epoch": null,
+    "resume_optimizer": "new AdamW with warm restart",
+    "best_epoch": 15,
+    "epochs_run": 0,
+    "training_seconds": 0.21550369262695312,
+    "torch": "2.14.1+cu130",
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "cuda": "13.0",
+    "peak_gpu_allocated_mib": 1374.69384765625,
+    "parameters": 479106,
+    "validation": {
+      "decisions": 1666,
+      "battles": 400,
+      "selected_gain": 0.09793291985988617,
+      "selected_gain_battle_bootstrap_ci95": [
+        0.09262353533233848,
+        0.10322059487046312
+      ],
+      "uniform_gain": -0.0005646379229035602,
+      "train_skill_prior_gain": 0.05494541674852371,
+      "gain_over_uniform": 0.09849756109217127,
+      "gain_over_uniform_ci95": [
+        0.09373771258507783,
+        0.10314251887514256
+      ],
+      "gain_over_skill_prior": 0.042987506836652756,
+      "gain_over_skill_prior_ci95": [
+        0.03775655167475775,
+        0.048419049707090295
+      ],
+      "empirical_oracle_gain_optimistic": 0.11922737956047058,
+      "probability_mse_to_rollout_rate": 0.01631011813879013,
+      "probability_mae_to_rollout_rate": 0.09388135373592377,
+      "probability_cross_entropy": 0.6425966024398804,
+      "by_team_size": {
+        "1": {
+          "decisions": 714,
+          "selected_gain": 0.09820334613323212,
+          "uniform_gain": 0.003197843807661954
+        },
+        "2": {
+          "decisions": 300,
+          "selected_gain": 0.09679687768220901,
+          "uniform_gain": 0.0013714356779432728
+        },
+        "3": {
+          "decisions": 652,
+          "selected_gain": 0.09815950691699982,
+          "uniform_gain": -0.005575733069955442
+        }
+      },
+      "by_pack": {
+        "2v2supp": {
+          "decisions": 200,
+          "selected_gain": 0.10345703363418579,
+          "uniform_gain": 0.0009409293547923093
+        },
+        "batch001": {
+          "decisions": 1002,
+          "selected_gain": 0.10369495302438736,
+          "uniform_gain": -9.069791462165295e-05
+        },
+        "rare1v1": {
+          "decisions": 220,
+          "selected_gain": 0.09348366409540176,
+          "uniform_gain": -0.001798093941648628
+        },
+        "revive2v2": {
+          "decisions": 100,
+          "selected_gain": 0.08347656577825546,
+          "uniform_gain": 0.0022324483242451994
+        },
+        "revivemix": {
+          "decisions": 144,
+          "selected_gain": 0.0670030415058136,
+          "uniform_gain": -0.006011510453657766
+        }
+      }
+    },
+    "test": {
+      "decisions": 1666,
+      "battles": 400,
+      "selected_gain": 0.09333030134439468,
+      "selected_gain_battle_bootstrap_ci95": [
+        0.08837540306890848,
+        0.09863121047811685
+      ],
+      "uniform_gain": -0.0051646929924337665,
+      "train_skill_prior_gain": 0.04923844709992409,
+      "gain_over_uniform": 0.09849499386278192,
+      "gain_over_uniform_ci95": [
+        0.09396860389792355,
+        0.10343491091058987
+      ],
+      "gain_over_skill_prior": 0.044091854244470596,
+      "gain_over_skill_prior_ci95": [
+        0.03930123587890043,
+        0.04944693378805389
+      ],
+      "empirical_oracle_gain_optimistic": 0.11957205086946487,
+      "probability_mse_to_rollout_rate": 0.014093904756009579,
+      "probability_mae_to_rollout_rate": 0.09018021076917648,
+      "probability_cross_entropy": 0.6434991359710693,
+      "by_team_size": {
+        "1": {
+          "decisions": 217,
+          "selected_gain": 0.07574884593486786,
+          "uniform_gain": -0.009010326011514089
+        },
+        "2": {
+          "decisions": 812,
+          "selected_gain": 0.10466056317090988,
+          "uniform_gain": -0.0027269994241101727
+        },
+        "3": {
+          "decisions": 129,
+          "selected_gain": 0.06522528827190399,
+          "uniform_gain": -0.006584598936840963
+        },
+        "4": {
+          "decisions": 508,
+          "selected_gain": 0.08986681699752808,
+          "uniform_gain": -0.007057875956035736
+        }
+      },
+      "by_pack": {
+        "2v2supp": {
+          "decisions": 200,
+          "selected_gain": 0.091796875,
+          "uniform_gain": -0.004559591375461724
+        },
+        "batch001": {
+          "decisions": 1020,
+          "selected_gain": 0.09996553510427475,
+          "uniform_gain": -0.0041856071642722955
+        },
+        "rare1v1": {
+          "decisions": 217,
+          "selected_gain": 0.07574884593486786,
+          "uniform_gain": -0.009010326011514089
+        },
+        "revive2v2": {
+          "decisions": 100,
+          "selected_gain": 0.10312499850988388,
+          "uniform_gain": -0.006184869353935275
+        },
+        "revivemix": {
+          "decisions": 129,
+          "selected_gain": 0.06522528827190399,
+          "uniform_gain": -0.006584598936840963
+        }
+      }
+    },
+    "configuration": {
+      "optimizer": "AdamW",
+      "lr": 0.0003,
+      "weight_decay": 0.01,
+      "schedule": "constant",
+      "batch_size": 128,
+      "max_epochs": 40,
+      "patience": 10,
+      "amp": true,
+      "q_loss_weight": 1,
+      "v_loss_weight": 0.25,
+      "advantage_mse_weight": 2,
+      "listwise_loss_weight": 1,
+      "target_temperature": 0.08,
+      "logit_temperature": 0.5
+    }
+  },
+  "retained_model": "mixed-best.pt",
+  "retained_model_sha256": "85b7402aee8c72e0ec8d0625a84d6930978b57d4c67547ab3246878ec90b7e74"
+}

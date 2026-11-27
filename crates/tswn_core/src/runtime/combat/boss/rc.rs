@@ -185,7 +185,9 @@ impl CombatRuntime {
             e.runtime.hp *= 2;
             e.runtime.rosmontic.as_mut().unwrap().actions = 0;
             updates.add(RunUpdate::new("[1]变成了[大]", actor.0 as usize, target.0 as usize, 1));
-            let quote = if self.rng.c50() { "还是大了" } else { "我觉得大了" };
+            // 三句成长台词等概率抽取，沿用共用台词渲染。
+            let quotes = ["还是大了", "我觉得大了", "其实我不太欣赏的来小"];
+            let quote = quotes[self.rc_pick(quotes.len())];
             self.boss_dialogue(actor, quote, updates);
         } else if big {
             // 使用原生狂暴而非愤怒威力状态，接下来两次行动由原生流程接管。
