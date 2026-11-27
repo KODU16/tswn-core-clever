@@ -91,6 +91,7 @@ impl CombatRuntime {
                 BossActionSkill::YuriControl => self.select_plain_yuri_control_targets(actor, smart),
                 BossActionSkill::MarioGet
                 | BossActionSkill::Squall
+                | BossActionSkill::Rc
                 | BossActionSkill::Quilt
                 | BossActionSkill::Smdd
                 | BossActionSkill::Xjy
@@ -160,6 +161,7 @@ impl CombatRuntime {
     pub fn drain_plain_boss_skill_into(&mut self, actor: EntityIdx, prepared: PreparedBossSkillAction, updates: &mut RunUpdates) {
         match prepared.selected {
             BossActionSkill::Squall => self.drain_squall_action_into(actor, updates),
+            BossActionSkill::Rc => self.drain_rc_action_into(actor, updates),
             BossActionSkill::Quilt => self.drain_quilt_action_into(actor, updates),
             BossActionSkill::Smdd => self.drain_smdd_action_into(actor, updates),
             BossActionSkill::Xjy => self.drain_xjy_action_into(actor, updates),

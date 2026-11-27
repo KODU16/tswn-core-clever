@@ -544,7 +544,10 @@ impl PlayerBuild {
         }
         // Squall 与 smdd 的 106 只是外显值；实际战斗速度按普通公式补上 160。
         if self.class == PlayerClass::Boss
-            && matches!(self.name.as_str(), "Squall" | "smdd" | "新纪元" | "TigerStar" | "Shabby_fish")
+            && matches!(
+                self.name.as_str(),
+                "Squall" | "smdd" | "新纪元" | "TigerStar" | "Shabby_fish" | "rc"
+            )
         {
             self.name_factor = 0.0;
             attrs = [106, 106, 106, 106, 106, 106, 106, 360];
@@ -647,6 +650,10 @@ impl PlayerBuild {
             attrs = [100, 100, 100, 100, 100, 100, 100, 1000];
             status = status_from_attrs(attrs, 0.0, true);
             status.speed = 100;
+        }
+        // RC 保留极低但非零的选敌权重，召唤物不在场时仍可被正常攻击。
+        if self.class == PlayerClass::Boss && self.name == "rc" {
+            status.attract = 0.000001;
         }
         let mut skills = overlay_skills.map_or_else(
             || SkillLoadoutSpec::standard(&levels, &boosted, &boosts, &self.action_order),

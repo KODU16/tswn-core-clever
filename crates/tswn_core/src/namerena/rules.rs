@@ -4,7 +4,8 @@
 pub const SAITAMA_RETIREMENT_WINNER: &str = "SAITAMA";
 
 /// 内置 Boss 名字表；用于身份分类、默认技能与免疫规则查询。
-pub const BOSS_NAMES: [&str; 52] = [
+pub const BOSS_NAMES: [&str; 53] = [
+    "rc",
     "mario",
     "sonic",
     "mosquito",
@@ -235,6 +236,8 @@ pub enum BossActionSkill {
     Saitama,
     /// Squall 的科研技能与研究助手统一进入专属结算器。
     Squall,
+    /// RC 与“小”分别只召唤和魅惑，不允许退回普攻。
+    Rc,
     /// 被子的钻出被子、多重魂、占领与鱼我所欲也统一进入专属结算器。
     Quilt,
     /// smdd 的十个做局技能统一进入专属结算器。
@@ -259,6 +262,7 @@ pub enum BossActionSkill {
 /// 马里奥的火球术初始等级为 0，吃到火焰花后由状态载荷改写为 120。
 pub fn boss_action_skills(name: &str) -> &'static [(BossActionSkill, u32)] {
     match boss_combat_name(name) {
+        "rc" => &[(BossActionSkill::Rc, 256)],
         "aokiji" => &[(BossActionSkill::IceAge, 70), (BossActionSkill::Ice, 80)],
         "ikaruga" => &[(BossActionSkill::IkarugaAttack, 48)],
         "mario" => &[(BossActionSkill::MarioGet, 63), (BossActionSkill::Fire, 0)],

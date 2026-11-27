@@ -427,6 +427,8 @@ impl CombatRuntime {
         updates: &mut RunUpdates,
         defend_value: &mut RuntimeDefendValue,
     ) {
+        // “小”在实际进入受击链时反击一次雷击术，护盾和零伤害不免除此效果。
+        self.rc_thunder_on_attack(target, defend_value.caster(), updates);
         // 被子衍生物在睡5觉/钻被/猴儿冰冻期间固定 0 伤，不再借用超大护盾。
         if self.quilt_minion_sleeping(target) {
             defend_value.set_damage(0);

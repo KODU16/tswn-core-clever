@@ -642,6 +642,7 @@ impl CombatRuntime {
         if !updates.capture_updates
             && !passive_decisions
             && let Some(defender) = self.entities.get(target)
+            && !self.is_rc_small(target)
             && !defender.runtime.flags.contains(PlayerKindFlags::BOSS)
             && defender.runtime.shield <= 0
             && (defender.runtime.protect_from.is_empty() || defender.runtime.protect_pre_defend_skill_count.is_none())

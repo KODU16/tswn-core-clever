@@ -14,6 +14,9 @@ pub mod mario;
 pub mod quilt;
 #[cfg(test)]
 pub mod quilt_tests;
+pub mod rc;
+#[cfg(test)]
+mod rc_tests;
 mod reimu_marisa;
 pub mod rosmontic;
 #[cfg(test)]

@@ -556,6 +556,13 @@ impl CombatRuntime {
         pre_action: PlainSkillPreActionOutcome,
     ) -> Option<PreparedPlainAction> {
         crate::runtime::forced_action::hit();
+        // RC 和“小”在脚本、狂暴或 MP 不足时也不能降级为普通攻击。
+        if self.is_rc_actor(actor) {
+            return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
+                selected: crate::namerena::BossActionSkill::Rc,
+                targets: PreparedTargetList::new(),
+            }));
+        }
         // 衍生物即使暂无可攻击目标，也可以睡觉、钻被或使用自身技能。
         if self.quilt_minion_kind(actor).is_some() {
             let target = self.select_plain_default_attack_target(actor, smart).unwrap_or(actor);

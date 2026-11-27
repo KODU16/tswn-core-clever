@@ -5,7 +5,8 @@ impl CombatRuntime {
     pub(super) fn prepare_search_action(&mut self, actor: EntityIdx, smart: bool) -> Option<PreparedPlainAction> {
         let runtime = &self.entities.get(actor)?.runtime;
         // 特殊技能权重和 Boss 继续使用原版路径，不改变其抽样语义。
-        if cfg!(feature = "cards")
+        if self.is_rc_actor(actor)
+            || cfg!(feature = "cards")
             || runtime.flags.contains(PlayerKindFlags::BOSS)
             || self.entities.get(actor)?.template.skills.uses_effective_skill_weights()
         {
