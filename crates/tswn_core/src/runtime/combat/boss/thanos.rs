@@ -225,6 +225,8 @@ impl CombatRuntime {
             .runtime
             .alive = false;
         self.mark_dead_with_linked_minions_into(target, team, updates);
+        // 响指的直接击倒也会让发动者吃下菜品。
+        self.restaurant_dish_defeated(actor, target, updates);
         // 原版清空最后一支敌队时由 checkWin 中止 onDie：不走击杀回调，也不再抽签。
         if !self.has_alive_enemy_or_pending_spawn(actor) {
             return true;

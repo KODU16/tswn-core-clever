@@ -290,14 +290,8 @@ impl CombatRuntime {
         if !self.is_restaurant(id) {
             return;
         }
-        // 被击倒的菜不能喂出或计数，下次自身行动直接重新烹饪。
-        if let Some(dish) = self.restaurant_state(id).dish
-            && !self.entities.get(dish).is_some_and(|e| e.runtime.alive && e.runtime.hp > 0)
-        {
-            let state = self.restaurant_state(id);
-            state.dish = None;
-            state.ingredients.clear();
-        }
+        // 无击倒者的移除不结算菜品；清理后继续处理仍在场的配方。
+        self.restaurant_prune_dishes(id);
         if self.restaurant_state(id).dish.is_some() {
             self.restaurant_feed(id, u);
         } else {
@@ -306,6 +300,11 @@ impl CombatRuntime {
     }
     /// 烹饪会移除入选敌人，但始终留下一个非召唤本体；不能移除者也不会作为人物材料。
     pub(crate) fn restaurant_cook(&mut self, id: EntityIdx, u: &mut RunUpdates) {
+        // 满六道时不能抓取人物或消耗烹饪随机数，制作本身不增加完成额度。
+        self.restaurant_prune_dishes(id);
+        if self.restaurant_state(id).stopped || self.restaurant_dish_count(id) >= 6 {
+            return;
+        }
         // 烹饪不是攻击，连平常不可选中的本体也计入敌方人数与保留判定。
         let team = self.plain_effective_team(id);
         let enemies: Vec<_> = self
@@ -394,6 +393,10 @@ impl CombatRuntime {
     }
     /// 三项食材用两个独立方法连接，整个菜名作为一个结构化高亮 token。
     pub(crate) fn restaurant_make_dish(&mut self, id: EntityIdx, items: Vec<RestaurantIngredient>, u: &mut RunUpdates) {
+        self.restaurant_prune_dishes(id);
+        if self.restaurant_state(id).stopped || self.restaurant_dish_count(id) >= 6 {
+            return;
+        }
         let mut name = String::new();
         for (i, item) in items.iter().enumerate() {
             if i > 0 {
@@ -414,8 +417,12 @@ impl CombatRuntime {
         e.template.id_key_name = DISH.to_owned();
         e.runtime.policies.damage_share = DamageSharePolicy::None;
         let s = self.restaurant_state(id);
-        s.ingredients = items;
-        s.dish = Some(dish);
+        if s.dish.is_none() {
+            s.ingredients = items;
+            s.dish = Some(dish);
+        } else {
+            s.dishes.push((dish, items));
+        }
         u.add(RunUpdate::new(
             format!("[0]开始烹饪，做出[{name}]"),
             id.0 as usize,
@@ -654,39 +661,95 @@ impl CombatRuntime {
             }
         }
     }
-    /// 完成一次喂菜后消耗菜；达到初始敌方人数十倍的完整循环数再自爆退场。
-    pub(crate) fn restaurant_feed(&mut self, id: EntityIdx, u: &mut RunUpdates) {
-        let Some(dish) = self.restaurant_state(id).dish.take() else {
-            return;
-        };
-        let items = std::mem::take(&mut self.restaurant_state(id).ingredients);
-        // 直接调用喂菜入口时同样拒绝已经被击倒的菜品。
-        if !self.entities.get(dish).is_some_and(|e| e.runtime.alive && e.runtime.hp > 0) {
+    /// 统计真实在场菜品，避免已死亡的快照记录占用六道上限。
+    fn restaurant_dish_count(&self, id: EntityIdx) -> usize {
+        self.entities
+            .iter()
+            .filter(|(_, e)| e.template.id_key_name == DISH && e.runtime.root_owner == id && e.runtime.alive && e.runtime.hp > 0)
+            .count()
+    }
+    /// 取出指定配方并补上队首；所有吃菜入口共用同一消费操作。
+    fn restaurant_take_dish(&mut self, id: EntityIdx, dish: EntityIdx) -> Option<Vec<RestaurantIngredient>> {
+        let s = self.restaurant_state(id);
+        if s.dish == Some(dish) {
+            s.dish = None;
+            let items = std::mem::take(&mut s.ingredients);
+            if !s.dishes.is_empty() {
+                let (next, recipe) = s.dishes.remove(0);
+                s.dish = Some(next);
+                s.ingredients = recipe;
+            }
+            Some(items)
+        } else {
+            let index = s.dishes.iter().position(|(next, _)| *next == dish)?;
+            Some(s.dishes.remove(index).1)
+        }
+    }
+    /// 未归因击倒的菜只清理配方，不产生食客或增加已喂数量。
+    fn restaurant_prune_dishes(&mut self, id: EntityIdx) {
+        let mut dishes: Vec<_> = self.restaurant_state(id).dishes.iter().map(|(dish, _)| *dish).collect();
+        dishes.extend(self.restaurant_state(id).dish);
+        for dish in dishes {
+            if !self.entities.get(dish).is_some_and(|e| e.runtime.alive && e.runtime.hp > 0) {
+                self.restaurant_take_dish(id, dish);
+            }
+        }
+    }
+    /// 真正确认死亡后由击倒者吃下；召唤物也可吃，但不增加十道菜额度。
+    pub(crate) fn restaurant_dish_defeated(&mut self, killer: EntityIdx, dish: EntityIdx, u: &mut RunUpdates) {
+        if killer == dish
+            || !self.entities.get(killer).is_some_and(|e| e.runtime.alive && e.runtime.hp > 0)
+            || !self
+                .entities
+                .get(dish)
+                .is_some_and(|e| e.template.id_key_name == DISH && e.runtime.hp <= 0)
+        {
             return;
         }
+        let id = self.entities.get(dish).unwrap().runtime.root_owner;
+        if !self.is_restaurant(id) {
+            return;
+        }
+        // 配方已被取走时说明正在主动喂出或已吃过，不能再次显示或触发。
+        let s = self.restaurant_state(id);
+        if s.dish != Some(dish) && !s.dishes.iter().any(|(next, _)| *next == dish) {
+            return;
+        }
+        self.ros_message(id, killer, "[1]吃下了菜品", u);
+        self.restaurant_eat(id, dish, killer, u);
+    }
+    /// 完成一次喂菜后消耗菜；达到初始敌方人数十倍的完整循环数再自爆退场。
+    pub(crate) fn restaurant_feed(&mut self, id: EntityIdx, u: &mut RunUpdates) {
+        self.restaurant_prune_dishes(id);
+        let Some(dish) = self.restaurant_state(id).dish else {
+            return;
+        };
         let team = self.plain_effective_team(id);
         let targets: Vec<_> = self
             .world
             .flat_alive()
             .iter()
             .copied()
-            .filter(|t| self.plain_effective_team(*t) != team)
+            .filter(|t| self.plain_effective_team(*t) != team && !self.entities.get(*t).unwrap().runtime.is_combat_minion())
             .collect();
         if targets.is_empty() {
-            self.restaurant_state(id).dish = Some(dish);
-            self.restaurant_state(id).ingredients = items;
-            return;
-        }
-        let targets: Vec<_> = targets
-            .into_iter()
-            .filter(|t| !self.entities.get(*t).unwrap().runtime.is_combat_minion())
-            .collect();
-        if targets.is_empty() {
-            self.restaurant_state(id).dish = Some(dish);
-            self.restaurant_state(id).ingredients = items;
             return;
         }
         let target = targets[self.restaurant_pick(targets.len())];
+        self.ros_message(id, target, "[0]将菜喂给[1]", u);
+        self.restaurant_eat(id, dish, target, u);
+    }
+    /// 无论主动喂出或被击倒，先取走唯一配方再结算，避免反击链重复吃菜。
+    fn restaurant_eat(&mut self, id: EntityIdx, dish: EntityIdx, target: EntityIdx, u: &mut RunUpdates) {
+        let Some(items) = self.restaurant_take_dish(id, dish) else {
+            return;
+        };
+        let count = !self.entities.get(target).unwrap().runtime.is_combat_minion();
+        let team = self.entities.get(dish).unwrap().runtime.team;
+        let e = self.entities.get_mut(dish).unwrap();
+        e.runtime.hp = 0;
+        e.runtime.alive = false;
+        self.world.mark_dead(dish, team);
         // 每份菜使用新的 300/90 虚拟施法状态，不继承上一份菜交换的血量或增益。
         if let Some(chef) = self.restaurant_state(id).chef {
             let e = self.entities.get_mut(chef).unwrap();
@@ -695,7 +758,6 @@ impl CombatRuntime {
             e.states.clear_score_profile_for_reuse();
         }
         self.restaurant_state(id).feeding = true;
-        self.ros_message(id, target, "[0]将菜喂给[1]", u);
         let mut skills: Vec<_> = items.into_iter().filter(|x| x.skill.is_some() || x.invocation.is_some()).collect();
         if skills.is_empty() {
             let n = 1 + self.restaurant_pick(5);
@@ -727,13 +789,11 @@ impl CombatRuntime {
         for event in u.updates.iter_mut().skip(result_start) {
             event.restaurant_recipient = Some(target.0 as usize);
         }
-        let team = self.entities.get(dish).unwrap().runtime.team;
-        let e = self.entities.get_mut(dish).unwrap();
-        e.runtime.hp = 0;
-        e.runtime.alive = false;
-        self.world.mark_dead(dish, team);
         let s = self.restaurant_state(id);
-        s.completed = s.completed.saturating_add(1);
+        // 制作不计数；主动喂出必为本体，击倒菜品者则按吃下时的身份判定。
+        if count {
+            s.completed = s.completed.saturating_add(1);
+        }
         let done = s.completed >= s.limit;
         if done
             && self

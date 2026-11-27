@@ -17,6 +17,8 @@ pub struct RestaurantRuntime {
     pub history: Vec<RestaurantIngredient>,
     pub dish: Option<EntityIdx>,
     pub ingredients: Vec<RestaurantIngredient>,
+    /// 额外待喂菜品各自保存配方，连同首道菜最多同时存活六道。
+    pub dishes: Vec<(EntityIdx, Vec<RestaurantIngredient>)>,
     pub completed: u32,
     pub limit: u32,
     pub stopped: bool,

@@ -496,6 +496,8 @@ impl CombatRuntime {
 
         self.entities.get_mut(target).unwrap().runtime.alive = false;
         self.mark_dead_with_linked_minions_into(target, team, updates);
+        // 先移出死亡菜品，再让击倒者结算食用效果，避免连锁重复触发。
+        self.restaurant_dish_defeated(caster, target, updates);
         if self.should_run_kill_hooks(caster, target) {
             self.drain_kill_hooks_into(caster, target, updates);
         }

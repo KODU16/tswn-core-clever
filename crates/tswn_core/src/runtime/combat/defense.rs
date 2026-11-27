@@ -48,6 +48,8 @@ impl CombatRuntime {
         if self.entities.get(target).is_some_and(|entity| entity.runtime.hp > 0) {
             return;
         }
+        // 确认未复活的菜品由击倒者吃下，配方消费独立于常规击杀奖励。
+        self.restaurant_dish_defeated(caster, target, updates);
         if self.should_run_kill_hooks(caster, target) {
             self.drain_kill_hooks_into(caster, target, updates);
         }

@@ -12,6 +12,64 @@ fn battle(names: &str) -> (RuntimeRunner, EntityIdx, EntityIdx) {
     (r, a, b)
 }
 
+/// 六道各自保留配方，制作不计数，满额不抓人；吃下一道后才能补菜。
+#[test]
+fn restaurant_six_dishes_keep_independent_recipes_and_only_eating_counts() {
+    let (mut r, a, b) = battle("alpha\nbeta\ngamma");
+    let rt = r.runtime_mut();
+    let mut u = RunUpdates::new();
+    for key in 25..31 {
+        rt.restaurant_make_dish(a, vec![ingredient(key, None)], &mut u);
+    }
+    assert_eq!(rt.restaurant_state(a).dishes.len(), 5);
+    assert_eq!(rt.restaurant_state(a).completed, 0);
+    let snapshot = rt.restaurant_state(a).clone();
+    let restored: crate::runtime::entity::RestaurantRuntime =
+        serde_json::from_slice(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+    assert_eq!(snapshot, restored);
+    let before = rt.world.flat_alive().to_vec();
+    let events = u.updates.len();
+    rt.restaurant_cook(a, &mut u);
+    rt.restaurant_make_dish(a, vec![ingredient(34, None)], &mut u);
+    assert_eq!(before, rt.world.flat_alive());
+    assert_eq!(events, u.updates.len());
+    // 击倒非队首菜也使用它自己的配方，不会消费队首的防御菜。
+    let dish = rt.restaurant_state(a).dishes[2].0;
+    assert!(rt.apply_plain_legacy_damage_into(b, dish, 10000, &mut u));
+    rt.drain_plain_lethal_damage_into(b, dish, &mut u);
+    assert_eq!(rt.restaurant_state(a).completed, 1);
+    assert_eq!(rt.restaurant_state(a).dishes.len(), 4);
+    assert!(u.updates.iter().any(|e| e.message == "[1]获得[护身符]效果" && e.target == b.0 as usize));
+    // 同一死亡链再次回调不能重复结算。
+    rt.drain_lethal_damage_hooks_into(b, dish, &mut u);
+    assert_eq!(rt.restaurant_state(a).completed, 1);
+    rt.restaurant_make_dish(a, vec![ingredient(34, None)], &mut u);
+    assert_eq!(rt.restaurant_state(a).dishes.len(), 5);
+    assert_eq!(rt.restaurant_state(a).completed, 1);
+}
+/// 召唤物吃菜生效但不计数；本体吃菜达到额度则触发餐厅退场。
+#[test]
+fn restaurant_defeated_dish_counts_bodies_but_not_summons() {
+    for summon in [true, false] {
+        let (mut r, a, b) = battle("alpha");
+        let rt = r.runtime_mut();
+        let mut u = RunUpdates::new();
+        let eater = if summon { rt.rc_spawn_small(b, &mut u) } else { b };
+        rt.restaurant_state(a).limit = 1;
+        rt.restaurant_make_dish(a, vec![ingredient(25, None)], &mut u);
+        let dish = rt.restaurant_state(a).dish.unwrap();
+        assert!(rt.apply_plain_legacy_damage_into(eater, dish, 10000, &mut u));
+        rt.drain_plain_lethal_damage_into(eater, dish, &mut u);
+        assert!(rt.restaurant_state(a).dish.is_none());
+        assert_eq!(rt.restaurant_state(a).completed, u32::from(!summon));
+        assert_eq!(rt.restaurant_state(a).stopped, !summon);
+        assert!(u.updates.iter().any(|e| e.message == "[1]获得[防御]效果" && e.target == eater.0 as usize));
+        let eaten = u.updates.iter().filter(|e| e.message == "[1]吃下了菜品").count();
+        rt.restaurant_dish_defeated(eater, dish, &mut u);
+        assert_eq!(u.updates.iter().filter(|e| e.message == "[1]吃下了菜品").count(), eaten);
+    }
+}
+
 /// 任意专属技能名称保存同源入口，改名不改变其结算，原施法者死亡仍能重放。
 #[test]
 fn restaurant_generic_call_uses_original_skill_and_current_stats() {
@@ -276,7 +334,7 @@ fn restaurant_stats_immunity_and_targetability() {
             e.runtime.resistance,
             e.runtime.wisdom
         ],
-        [114, -25, 9, 106, -17, -17, -28, -26]
+        [114, -25, 9, 160, -17, -17, -28, -26]
     );
     let mut u = RunUpdates::new();
     assert!(rt.world.flat_alive().contains(&a));
@@ -405,7 +463,7 @@ fn restaurant_feeds_bodies_not_summons() {
     assert_ne!(feed.target, small.0 as usize);
     assert_eq!(rt.restaurant_state(a).completed, 1);
 }
-/// 菜品一百体力，被击倒后不能喂出计数，下次行动重新做菜。
+/// 没有击倒者的直接移除不制造食客，下次行动重新做菜。
 #[test]
 fn restaurant_defeated_dish_does_not_count_as_served() {
     let (mut runner, restaurant, _) = battle("alpha");
