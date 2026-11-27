@@ -1,4 +1,4 @@
-//! CPU 搜索的预算与一次决策结果；不改变默认自动战斗规则。
+//! Clever 学习决策及旧搜索回退的预算与结果；默认自动战斗仍为原版。
 use super::nn_eval::ValueStage;
 use super::*;
 
@@ -77,6 +77,31 @@ mod tests {
             ],
             config.registry,
         ))
+    }
+
+    #[test]
+    fn trained_policy_selects_and_settles_highest_scoring_action() {
+        // 用真实候选与结算比较，验证默认 Clever 确实调用新模型且不额外消耗随机流。
+        let mut field = tactical_field();
+        let turn = field.search_turn_preview();
+        let scores = crate::runtime::clever_policy::score_turn(&field, &turn).unwrap();
+        let chosen = (0..scores.len())
+            .max_by(|&a, &b| scores[a].total_cmp(&scores[b]).then(b.cmp(&a)))
+            .unwrap();
+        let mut expected = field.clone();
+        expected.scratch.search_turn = Some(SearchTurn::new(Some(chosen), None));
+        expected.run_minimal_round();
+        expected.scratch.search_turn = None;
+        let actual = field.run_search_round(SearchConfig::default());
+        assert_eq!(actual.estimates[0].action, turn.candidates[chosen].action);
+        assert!(actual.estimates.iter().all(|e| e.samples == 0 && e.completed == 0));
+        for (id, entity) in field.entities.iter() {
+            assert_eq!(entity.runtime, expected.entities.get(id).unwrap().runtime);
+        }
+        for _ in 0..32 {
+            assert_eq!(field.rng.next_u8(), expected.rng.next_u8());
+        }
+        assert!(field.scratch.search_turn.is_none());
     }
 
     fn charm_to(field: &mut CombatRuntime, id: EntityIdx, team: usize) {
@@ -235,7 +260,7 @@ mod tests {
     #[test]
     fn shortlisted_candidates_receive_equal_samples_before_selection() {
         let mut field = tactical_field();
-        let result = field.run_search_round(SearchConfig {
+        let result = field.run_formula_search_round(SearchConfig {
             samples: 16,
             horizon: 24,
             shortlist: 4,
@@ -873,6 +898,9 @@ pub(crate) struct SearchTurn {
     pub simulation_seed: Option<u64>,
     pub candidates: Vec<SearchCandidate>,
     pub actor: Option<EntityIdx>,
+    /// 决策点运行态与候选技能等级只用于模型输入，不携带随机流。
+    pub actor_runtime: Option<PlayerRuntime>,
+    pub candidate_levels: Vec<u32>,
     /// 行动前魅惑等状态解析后的有效阵营，目标和价值使用同一口径。
     pub team: Option<usize>,
 }
@@ -883,6 +911,8 @@ impl SearchTurn {
             simulation_seed,
             candidates: Vec::new(),
             actor: None,
+            actor_runtime: None,
+            candidate_levels: Vec::new(),
             team: None,
         }
     }
@@ -1338,8 +1368,37 @@ impl CombatRuntime {
         )
     }
 
-    /// 多样本短续局筛选后给所有入围动作相同预算，避免用四次偶然结果淘汰组合起手。
+    /// Clever 默认使用已验证混合模型排序；未覆盖的专属技能保留旧搜索路径。
     pub fn run_search_round(&mut self, config: SearchConfig) -> SearchRound {
+        let turn = self.search_turn_preview();
+        if let Some(actor) = turn.actor
+            && !config.team.is_some_and(|team| self.entities.get(actor).unwrap().runtime.team != team)
+            && turn.candidates.len() > 1
+            && let Some(scores) = super::clever_policy::score_turn(self, &turn)
+        {
+            let mut ranked: Vec<_> = (0..scores.len()).collect();
+            ranked.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then(a.cmp(&b)));
+            let chosen = ranked[0];
+            let estimates = ranked
+                .into_iter()
+                .map(|index| SearchEstimate {
+                    action: turn.candidates[index].action.clone(),
+                    value: (2.0 / (1.0 + f64::from(-scores[index]).exp())) - 1.0,
+                    wins: 0,
+                    completed: 0,
+                    samples: 0,
+                })
+                .collect();
+            self.scratch.search_turn = Some(SearchTurn::new(Some(chosen), None));
+            let outcome = self.run_minimal_round();
+            self.scratch.search_turn = None;
+            return SearchRound { outcome, estimates };
+        }
+        self.run_formula_search_round(config)
+    }
+
+    /// 旧公式搜索保留给未覆盖场景与离线对照，不给学习模型叠加熟练度奖金。
+    pub fn run_formula_search_round(&mut self, config: SearchConfig) -> SearchRound {
         let turn = self.search_turn_preview();
         let Some(actor) = turn.actor else {
             return SearchRound {

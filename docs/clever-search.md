@@ -1,12 +1,20 @@
-# CPU 搜索实验版
+# Clever 学习策略与搜索回退
 
-搜索入口 `CombatRuntime::run_search_round`，命令行 `clever-search`。默认战斗接口仍使用原版策略；Clever 展示页可显式启用搜索策略，其他默认战斗接口保持原版策略。
+搜索入口 `CombatRuntime::run_search_round`，命令行 `clever-search`。默认战斗接口仍使用原版策略；Clever 展示页可显式启用学习策略，其他默认战斗接口保持原版策略。
 
 ## 2026-11-26 上游架构同步
 
 已合入维护者 PR #1 的模块目录化、Boss 拆分与所有者字段改名（source_id → root_owner_id）。Clever 的搜索模块、临时搜索状态、正式行动入口、会话配置与逐步胜率接口继续接入新结构；扩展评分会话与上游原版评分分别保留，网页仍使用 Clever 四参数评分接口。旧 Boss 文件副本与 scratch 模块由新目录实现取代，避免重复维护。
 
-## 决策规则
+## 2026-11-27 混合学习策略
+
+Clever 现优先使用 `clever-mixed-v1-20261127-e15`，即停止过拟合续训后保留的第 15 轮混合模型。模型、原始检查点与标准化参数均已提交，详见 [模型说明](../crates/tswn_core/models/clever-mixed-v1/README.md)。网页仍默认原版；选择“Clever 学习模型（混合 v1）”后，普通对局与评分测试都通过同一入口使用学习决策。
+
+情景和候选分别编码，模型直接选最高分合法动作／目标，由正式引擎结算，不叠加旧公式熟练度 bonus，不读取名字、后缀、seed、PBB 分数或未来 RNG。模型分数不是采样胜率。强制行动沿用原机制；无法编码的专属技能、未训练的动作种类回退下述旧搜索，Boss、cards 和 effective skill weights 继续沿用原机制。旧 16/128/4 预算只对回退搜索有效。
+
+验证包括 1030 项核心测试、65 项前端测试、Rust/PyTorch 真实场景数值对齐、浏览器 WASM 数值与 1v1～4v4 对局、单方 Clever 评分。离线单步收益不能解释为整场策略胜率提升，发布网页供实战评估。
+
+## 旧公式搜索规则（仅回退路径）
 
 - 保留强制行动、行动前后状态和正式结算流程。在完整回合起点克隆战场，不直接拼接伤害结果。
 - Clever 将满足条件的正熟练度主动技能全部列为候选，熟练度按现有加分规则参与比较；保留武器特例，MP 门槛仍为 8～23，最终选择技能时扣费。物理和可负担的魔法普攻也参与比较。此规则沿用合并前实现，原版策略仍走独立路径。
@@ -47,7 +55,7 @@ cargo build --release -p tswn_core --bin clever-search --features 'no_debug,mima
 
 ## Clever 网页与发布来源
 
-- 前端入口：https://kodu16.github.io/namerena/ 。默认选择原版策略，可在输入面板显式启用 Clever；strategy=search 分享链接保留 Clever。双方搜索预算为 16 samples、128 horizon、4 shortlist，模拟 seed 固定为 1；对照时输入相同的显式 seed 行。分享链接保留策略。
+- 前端入口：https://kodu16.github.io/namerena/ 。默认选择原版策略，可在输入面板显式启用 Clever；strategy=search 分享链接保留 Clever。回退搜索预算为 16 samples、128 horizon、4 shortlist，模拟 seed 固定为 1；对照时输入相同的显式 seed 行。分享链接保留策略。
 - 网页通过 WASM BattleSession.set_search 接入同一 run_search_round，每次只推进真实回合，试算不计入回放或回合上限。搜索耗时随阵容增长，尚未验证策略整体胜率优于原版。
 - 发布源固定为本项目 KODU16/tswn-core-clever 的 main；仅在用户明确要求时同步 shenjackyuanjie/tswn-core，合并后保留 Clever 搜索与评分扩展。后续修改应从这里验证、提交并发布至 Clever main。
 - KODU16/kodu16.github.io 的 Pages 工作流每 5 分钟检查 Clever main，对比线上 build.json，只在版本变化时重建，WASM 和前端取同一提交。GitHub 定时任务可能延迟；手动运行主页部署工作流可立即同步。
@@ -91,7 +99,7 @@ alpha
 
 普通 profile 使用 `\u0002` 修饰符，强化 profile 使用 `!` 修饰符；只切换陪测 profile 的构造，不改写被测名字。单名评分由被测名字与一个 profile 组队，对战两个 profile；相同名字两行只保留一个被测实体，对战一个 profile。多名字队伍继续沿用现有评分分组规则。页面标题显示模式与出招策略。
 
-输入面板的策略决定全部 10000 场 profile 对局的战斗方式：选择 Clever 时，双方均使用与回放一致的 run_search_round 和 16/128/4 预算；选择原版则双方原版。新增的“评分验证”复选框默认不勾选，只有勾选且选择 Clever 时，才让被测本体及其 profile 队友使用 Clever、对手使用原版。普通对局不受此框影响。只在累计 1000 场（10%）和 10000 场（100%）展示结果，随后永久停止该会话。Profile 名单、空战斗 seed 和 WIN_RATE_EVAL_RQ 沿用现有评分接口；旧 score() API 仍为原版评分。
+输入面板的策略决定全部 10000 场 profile 对局的战斗方式：选择 Clever 时，双方均使用与回放一致的 run_search_round 学习策略，回退搜索采用 16/128/4 预算；选择原版则双方原版。新增的“评分验证”复选框默认不勾选，只有勾选且选择 Clever 时，才让被测本体及其 profile 队友使用 Clever、对手使用原版。普通对局不受此框影响。只在累计 1000 场（10%）和 10000 场（100%）展示结果，随后永久停止该会话。Profile 名单、空战斗 seed 和 WIN_RATE_EVAL_RQ 沿用现有评分接口；旧 score() API 仍为原版评分。
 
 技能／动作频率沿用参考站口径：被测本体产生的正 score、含 [0] 的真实消息次数，除以已完成场数再乘 100。不计 profile、召唤物、搜索试算及兼容层的 [s_dmg0] 伤害消息。这是每百局发生次数，不是每次出手的发动概率，可以超过 100%。Worker 支持立即取消正在计算的对局。
 

@@ -33,6 +33,8 @@
 //! `LegacyStep` 是当前 Runtime 内用于对齐游戏行动条的调度方式。
 
 mod batch;
+/// 已训练混合策略的特征投影与纯 Rust 推理。
+pub mod clever_policy;
 mod combat;
 pub mod control;
 mod cqp;

@@ -1,0 +1,172 @@
+{
+  "id": "clever-mixed-v1-20261127-e15",
+  "feature_version": "mechanism-summary-trial-v1",
+  "state_width": 1318,
+  "action_width": 327,
+  "training_seed": 20261129,
+  "epoch": 15,
+  "dtype": "float32 little-endian row-major",
+  "weights_sha256": "36f895c5260bcbddfee34221d47a9095fe8da04b708ed3faa077727b299b7743",
+  "training_checkpoint_sha256": "85b7402aee8c72e0ec8d0625a84d6930978b57d4c67547ab3246878ec90b7e74",
+  "inference_float_count": 482267,
+  "layout": [
+    {
+      "name": "xmean",
+      "shape": [
+        1318
+      ],
+      "offset_floats": 0,
+      "length": 1318
+    },
+    {
+      "name": "xstd",
+      "shape": [
+        1318
+      ],
+      "offset_floats": 1318,
+      "length": 1318
+    },
+    {
+      "name": "amean",
+      "shape": [
+        327
+      ],
+      "offset_floats": 2636,
+      "length": 327
+    },
+    {
+      "name": "astd",
+      "shape": [
+        327
+      ],
+      "offset_floats": 2963,
+      "length": 327
+    },
+    {
+      "name": "state.0.weight",
+      "shape": [
+        256,
+        1318
+      ],
+      "offset_floats": 3290,
+      "length": 337408
+    },
+    {
+      "name": "state.0.bias",
+      "shape": [
+        256
+      ],
+      "offset_floats": 340698,
+      "length": 256
+    },
+    {
+      "name": "state.2.weight",
+      "shape": [
+        256
+      ],
+      "offset_floats": 340954,
+      "length": 256
+    },
+    {
+      "name": "state.2.bias",
+      "shape": [
+        256
+      ],
+      "offset_floats": 341210,
+      "length": 256
+    },
+    {
+      "name": "state.4.weight",
+      "shape": [
+        128,
+        256
+      ],
+      "offset_floats": 341466,
+      "length": 32768
+    },
+    {
+      "name": "state.4.bias",
+      "shape": [
+        128
+      ],
+      "offset_floats": 374234,
+      "length": 128
+    },
+    {
+      "name": "action.0.weight",
+      "shape": [
+        128,
+        327
+      ],
+      "offset_floats": 374362,
+      "length": 41856
+    },
+    {
+      "name": "action.0.bias",
+      "shape": [
+        128
+      ],
+      "offset_floats": 416218,
+      "length": 128
+    },
+    {
+      "name": "action.2.weight",
+      "shape": [
+        128,
+        128
+      ],
+      "offset_floats": 416346,
+      "length": 16384
+    },
+    {
+      "name": "action.2.bias",
+      "shape": [
+        128
+      ],
+      "offset_floats": 432730,
+      "length": 128
+    },
+    {
+      "name": "q.0.weight",
+      "shape": [
+        128,
+        384
+      ],
+      "offset_floats": 432858,
+      "length": 49152
+    },
+    {
+      "name": "q.0.bias",
+      "shape": [
+        128
+      ],
+      "offset_floats": 482010,
+      "length": 128
+    },
+    {
+      "name": "q.3.weight",
+      "shape": [
+        1,
+        128
+      ],
+      "offset_floats": 482138,
+      "length": 128
+    },
+    {
+      "name": "q.3.bias",
+      "shape": [
+        1
+      ],
+      "offset_floats": 482266,
+      "length": 1
+    }
+  ],
+  "selection": "highest validation gain among mixed seeds; continuation did not improve",
+  "input_exclusions": [
+    "name",
+    "suffix",
+    "seed",
+    "PBB score",
+    "heuristic score"
+  ]
+}

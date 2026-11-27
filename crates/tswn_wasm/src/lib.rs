@@ -85,6 +85,21 @@ pub use score::ScoreTestSession;
 use wasm_bindgen::prelude::*;
 pub use win_rate::WinRateSession;
 
+/// 返回随 WASM 固定发布的模型版本和权重校验信息，便于核验网页缓存。
+#[wasm_bindgen]
+pub fn clever_model_info() -> String { tswn_core::runtime::clever_policy::MODEL_MANIFEST.to_owned() }
+
+/// 只读推理诊断：每 327 项为一个动作，用于浏览器与训练模型的数值对齐验证。
+#[wasm_bindgen]
+pub fn clever_policy_logits(context: Vec<f32>, actions: Vec<f32>) -> Result<Vec<f32>, JsValue> {
+    let width = tswn_core::runtime::clever_policy::ACTION_WIDTH;
+    if actions.is_empty() || actions.len() % width != 0 {
+        return Err(JsValue::from_str("invalid action feature length"));
+    }
+    let rows: Vec<Vec<f32>> = actions.chunks_exact(width).map(|row| row.to_vec()).collect();
+    tswn_core::runtime::clever_policy::score_features(&context, &rows).ok_or_else(|| JsValue::from_str("invalid model features"))
+}
+
 /// 确保 panic hook 只安装一次。
 static PANIC_HOOK: Once = Once::new();
 

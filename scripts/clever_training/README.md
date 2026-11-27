@@ -49,4 +49,4 @@ C:/codex_envs/clever-gpu/Scripts/python.exe scripts/clever_training/gpu_trial.py
 
 `best.pt` 包含权重和标准化参数；`last.pt` 保存最后一轮权重及当时的优化器和 AMP 状态，供检查过拟合或后续扩展精确恢复。当前 `--resume` 始终执行上述优化器热重启，不会自动恢复优化器动量。本次长训在收到立即停止要求后已终止，未用满 600 秒；已落盘的最佳权重经独立只读评估重新核验。其确切脚本快照与运行设计保存在本地输出目录。通过 `--evaluate-only --resume <best.pt>` 可重算既有检查点的留出指标而不做梯度更新。
 
-同时输出配置、列定义、学习曲线数据、预测和审计。模型与训练张量保存在已忽略的 `crates/nn_handoff/`，不加入 Git。按当前要求仅保留混合模型权重，专家模型权重已移除，历史对照指标继续留档。
+同时输出配置、列定义、学习曲线数据、预测和审计。训练缓存与中间检查点保存在已忽略的 `crates/nn_handoff/`；发布用最佳混合检查点和推理参数已提交至 `crates/tswn_core/models/clever-mixed-v1/`，可使用 `export_policy.py` 复现导出。按当前要求仅保留混合模型权重，专家模型权重已移除，历史对照指标继续留档。

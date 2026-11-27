@@ -50,7 +50,7 @@ impl CombatRuntime {
                 .collect();
             for (fixed_lane, skill, level) in entries {
                 // Clever 规则：条件满足的主动技能全部进候选——不按顺序逐个掷资格（无顺序先后、
-                // 无空发）；发不发动与发动哪个由搜索比较决定，熟练度以加分形式参与（见 search.rs）。
+                // 无空发）；由学习模型选择，熟练度作为输入；仅旧搜索回退另外加分（见 search.rs）。
                 if level == 0 || !self.plain_action_skill_allowed(actor, skill, level, smart) {
                     continue;
                 }
@@ -63,7 +63,19 @@ impl CombatRuntime {
                 }
             }
         }
+        // 保存候选准备点的行动者数值，复现训练时的决策快照而不读取 RNG。
+        let actor_runtime = self.entities.get(actor)?.runtime.clone();
+        let skills = &self.entities.get(actor)?.template.skills;
+        let candidate_levels = candidates
+            .iter()
+            .map(|candidate| match &candidate.action {
+                PreparedPlainAction::BuiltinSkill(action) => skills.level_at(action.selected.fixed_lane).unwrap_or(0),
+                _ => 0,
+            })
+            .collect();
         let turn = self.scratch.search_turn.as_mut()?;
+        turn.actor_runtime = Some(actor_runtime);
+        turn.candidate_levels = candidate_levels;
         turn.actor = Some(actor);
         turn.team = Some(team);
         turn.candidates = candidates;
