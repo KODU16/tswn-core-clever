@@ -196,6 +196,7 @@ impl RuntimeRunner {
             schema_version: MODEL_STATE_SCHEMA_VERSION,
             round: rt.round,
             skill_reserves: rt.scratch.skill_reserves.clone(),
+            clever_reserve_version: crate::runtime::skill_reserve::RESERVE_VERSION,
             clever_skill_multiplier_micros: rt.scratch.clever_skill_multiplier_micros,
             entity_slot_count: rt.entities.len(),
             input_teams: self.input_groups.clone(),
@@ -368,6 +369,9 @@ pub struct BattleModelState {
     /// 学习策略储备账本；旧原版快照缺省为空，现有v1网络不读取此字段。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skill_reserves: Vec<crate::runtime::skill_reserve::SkillReserve>,
+    /// 主动储备规则版本；缺失表示历史数据，采集器据此拒绝混用旧规则。
+    #[serde(default)]
+    pub clever_reserve_version: u32,
     #[serde(default)]
     pub clever_skill_multiplier_micros: u32,
     /// 包括为使魔生成而保留的空 ID 槽；与实体列表长度不同。

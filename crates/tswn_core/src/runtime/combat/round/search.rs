@@ -4,11 +4,75 @@ use crate::runtime::search::{SearchCandidate, SearchTurn};
 #[cfg(test)]
 mod reserve_tests {
     use super::*;
-    use crate::runtime::skill_reserve::RESERVE_UNIT;
+
+    #[test]
+    fn same_skill_lanes_share_stock_and_basic_type_is_fixed_by_damage() {
+        // 两个同名火球槽仍可枚举，但共用账本；普攻每目标只有一个类型。
+        let config = default_custom_runtime_import_config().unwrap();
+        let fire = config.registry.skill_id_by_export_name(BuiltinActiveSkill::Fire.export_name()).unwrap();
+        let mut field = CombatRuntime::from_template(PreparedCombatTemplate::with_registry(
+            vec![
+                PlayerTemplate::new(1, "actor", 0, 1000, 100)
+                    .with_magic(80)
+                    .with_magic_point(100)
+                    .with_skill_loadout(SkillLoadout::from_skill_levels([(fire, 64), (fire, 64)])),
+                PlayerTemplate::new(2, "enemy", 1, 1000, 1),
+            ],
+            config.registry,
+        ));
+        let actor = EntityIdx(0);
+        for _ in 0..40 {
+            field.scratch.search_turn = Some(SearchTurn::new(Some(0), None));
+            field.prepare_search_action(actor, true);
+        }
+        assert_eq!(field.scratch.skill_reserves.len(), 1);
+        assert_eq!(field.scratch.skill_reserves[0].earned(), 30.0);
+        let before = field.scratch.skill_reserves[0].consumed;
+        field.scratch.search_turn = Some(SearchTurn::new(None, None));
+        field.prepare_search_action(actor, true);
+        let turn = field.scratch.search_turn.take().unwrap();
+        let selected = turn
+            .candidates
+            .iter()
+            .position(|c| {
+                matches!(&c.action,
+            PreparedPlainAction::BuiltinSkill(a) if a.selected.fixed_lane == 1)
+            })
+            .unwrap();
+        field.scratch.search_turn = Some(SearchTurn::new(Some(selected), None));
+        field.prepare_search_action(actor, true);
+        assert_eq!(field.scratch.skill_reserves[0].consumed, before + 1);
+        for (magic, defense, resistance, mp, expected_magic) in [
+            (80, 20, 20, 100, false),
+            (80, 1000, 0, 100, true),
+            (160, 20, 20, 0, false),
+            (160, 20, 20, 15, true),
+            (100, 20, 20, 100, false),
+        ] {
+            field.entities.get_mut(actor).unwrap().runtime.magic = magic;
+            field.entities.get_mut(actor).unwrap().runtime.magic_point = mp;
+            let enemy = &mut field.entities.get_mut(EntityIdx(1)).unwrap().runtime;
+            enemy.defense = defense;
+            enemy.resistance = resistance;
+            field.scratch.search_turn = Some(SearchTurn::new(None, None));
+            field.prepare_search_action(actor, true);
+            let turn = field.scratch.search_turn.take().unwrap();
+            let basics: Vec<_> = turn
+                .candidates
+                .iter()
+                .filter(|c| matches!(c.action, PreparedPlainAction::BasicAttack { .. }))
+                .collect();
+            assert_eq!(basics.len(), 1);
+            assert!(
+                matches!(basics[0].action, PreparedPlainAction::BasicAttack { use_magic, .. } if use_magic == expected_magic)
+            );
+            assert_eq!(basics[0].cost, if expected_magic { ((magic - 100) >> 2).max(0) } else { 0 });
+        }
+    }
 
     #[test]
     fn ordered_shares_multiplier_storage_and_legal_bursts() {
-        // 两个64熟练度技能按1/2、1/4累积；4倍时各项每次均获得一份。
+        // 两个64熟练度技能按1/2、1/4累积；4倍封顶归一后均为1/2。
         let config = default_custom_runtime_import_config().unwrap();
         let fire = config.registry.skill_id_by_export_name(BuiltinActiveSkill::Fire.export_name()).unwrap();
         let ice = config.registry.skill_id_by_export_name(BuiltinActiveSkill::Ice.export_name()).unwrap();
@@ -30,8 +94,10 @@ mod reserve_tests {
             }
             let stock = &runtime.scratch.skill_reserves;
             assert_eq!(stock.len(), 2);
-            assert_eq!(stock[0].available(), if multiplier == 1 { 20 } else { 40 });
-            assert_eq!(stock[1].available(), if multiplier == 1 { 10 } else { 40 });
+            assert_eq!(stock[0].earned(), 20.0);
+            assert_eq!(stock[1].earned(), if multiplier == 1 { 10.0 } else { 20.0 });
+            // v6允许延迟发行；不能再把全部累计额度误当成已发次数。
+            assert!(stock.iter().all(|r| r.available() >= 8));
             let before = runtime.scratch.skill_reserves.clone();
             runtime.entities.get_mut(actor).unwrap().runtime.magic_point = 0;
             runtime.scratch.search_turn = Some(SearchTurn::new(Some(0), None));
@@ -61,7 +127,7 @@ mod reserve_tests {
             }
             assert_eq!(runtime.scratch.skill_reserves[1].consumed, 8);
             for r in &runtime.scratch.skill_reserves {
-                assert_eq!(r.initial_phase + r.earned_units, r.issued * RESERVE_UNIT + r.fraction);
+                assert!((r.initial_credit() + r.earned() - r.issued as f64 - r.credit()).abs() < 1e-10);
                 assert!(r.consumed <= r.issued);
             }
             // 整场复位清空额度与倍率；分支克隆具有独立账本。
@@ -97,25 +163,22 @@ impl CombatRuntime {
             if self.is_quilt(target) || self.entities.get(target)?.runtime.team == team {
                 continue;
             }
+            // 普攻类型不交给模型学习：按目标防抗比较简单伤害估计，MP不足只能物攻。
+            let defender = &self.entities.get(target)?.runtime;
+            let magic_cost = ((magic - attack) >> 2).max(0);
+            let physical_damage =
+                f64::from(attack.max(0)) * (f64::from(attack) + 64.0).max(0.0) / (f64::from(defender.defense) + 64.0).max(1.0);
+            let magic_damage =
+                f64::from(magic.max(0)) * (f64::from(magic) + 64.0).max(0.0) / (f64::from(defender.resistance) + 64.0).max(1.0);
+            let use_magic = mp >= magic_cost && magic_damage > physical_damage;
             candidates.push(SearchCandidate {
                 action: PreparedPlainAction::BasicAttack {
                     target,
-                    use_magic: false,
-                    amount: attack,
+                    use_magic,
+                    amount: if use_magic { magic } else { attack },
                 },
-                cost: 0,
+                cost: if use_magic { magic_cost } else { 0 },
             });
-            let magic_cost = (magic - attack) >> 2;
-            if magic > attack && mp >= magic_cost {
-                candidates.push(SearchCandidate {
-                    action: PreparedPlainAction::BasicAttack {
-                        target,
-                        use_magic: true,
-                        amount: magic,
-                    },
-                    cost: magic_cost,
-                });
-            }
         }
         if mp >= cost {
             let skills = &self.entities.get(actor)?.template.skills;
@@ -125,6 +188,8 @@ impl CombatRuntime {
                 .filter_map(|&lane| Some((lane, self.builtin_active_skill(skills.skills()[lane])?, skills.level_at(lane)?)))
                 .collect();
             let mut carry = 1.0;
+            let mut legal = Vec::new();
+            let mut chances = Vec::new();
             for (fixed_lane, skill, level) in entries {
                 // 原版扫描份额 q_i=p_i*前项全失败率；不可用技能不占前置份额。
                 if level == 0 || !self.plain_action_skill_allowed(actor, skill, level, smart) {
@@ -146,9 +211,19 @@ impl CombatRuntime {
                     let probability = f64::from(level.min(128)) / 128.0;
                     let share = carry * probability;
                     carry *= 1.0 - probability;
-                    if !self.accrue_skill_reserve(actor, fixed_lane, skill, share) {
-                        continue;
-                    }
+                    chances.push((skill.export_name(), share));
+                }
+                legal.push((fixed_lane, skill, targets));
+            }
+            // 先汇总同名槽份额并统一发行，再枚举共享库存下的全部合法目标。
+            self.prepare_skill_reserves(actor, &chances);
+            for (fixed_lane, skill, targets) in legal {
+                if !matches!(
+                    skill,
+                    BuiltinActiveSkill::WeaponS11 | BuiltinActiveSkill::WeaponDeathNote | BuiltinActiveSkill::WeaponXuanYue
+                ) && !self.has_skill_reserve(actor, skill)
+                {
+                    continue;
                 }
                 let selected = SelectedBuiltinSkill { skill, fixed_lane };
                 for targets in targets {
@@ -186,7 +261,7 @@ impl CombatRuntime {
                     BuiltinActiveSkill::WeaponS11 | BuiltinActiveSkill::WeaponDeathNote | BuiltinActiveSkill::WeaponXuanYue
                 )
             {
-                self.consume_skill_reserve(actor, action.selected.fixed_lane);
+                self.consume_skill_reserve(actor, action.selected.skill);
             }
             self.entities.get_mut(actor)?.runtime.magic_point -= selected.cost;
             return Some(selected.action);
