@@ -308,6 +308,38 @@ fn rc_heals_lowest_current_hp_small_only_and_can_draw_after_growth_or_death() {
     assert!((1..=3).contains(&rt.rc_small_count(rc)));
 }
 
+/// 火球、净化的独立伤害入口遵守相同条件，纯毒伤和 RC 攻击不触发。
+#[test]
+fn rc_small_fire_disperse_and_poison_damage_follow_retaliation_rules() {
+    for kind in 0..3 {
+        for (amount, expected) in [(0, 0), (1, usize::from(kind != 2)), (72, 0)] {
+            for from_rc in [false, true] {
+                let (mut r, rc, enemy) = battle();
+                let rt = r.runtime_mut();
+                let small = rt.rc_spawn_small(rc, &mut RunUpdates::new());
+                let caster = if from_rc { rc } else { enemy };
+                let mut u = RunUpdates::new();
+                match kind {
+                    0 => {
+                        rt.apply_plain_legacy_damage_with_fire_into(caster, small, amount, Some(12345), &mut u);
+                    }
+                    1 => {
+                        rt.apply_disperse_attack_damage_into(caster, small, amount, &mut u);
+                    }
+                    _ => {
+                        rt.apply_poison_tick_damage_into(caster, small, amount, &mut u);
+                    }
+                }
+                assert_eq!(
+                    thunder_count(&u),
+                    if from_rc { 0 } else { expected },
+                    "kind={kind}, damage={amount}, rc={from_rc}"
+                );
+            }
+        }
+    }
+}
+
 /// 快速续局、真实回放与同输入重建使用同一套召唤和反击随机流。
 #[test]
 fn rc_battles_match_captured_and_fast_execution() {

@@ -796,6 +796,7 @@ impl CombatRuntime {
         let actual_damage = amount.max(0).min(target_entity.runtime.hp.max(0));
         target_entity.runtime.hp = (target_entity.runtime.hp - amount).max(0);
         let was_alive = target_entity.runtime.alive;
+        let survived_hit = target_entity.runtime.hp > 0;
         self.record_squall_damage(caster, target, actual_damage);
         updates.add_with(|| RuntimeFrame::legacy_damage_update(caster.0 as usize, target.0 as usize, amount));
         self.relay_quilt_damage(caster, target, amount, updates);
@@ -806,6 +807,10 @@ impl CombatRuntime {
             self.apply_fire_on_damage(target, key);
         }
         self.drain_plain_post_damage_skill_chain_into(target, amount, caster, updates);
+        // 火球与净化走独立扣血入口，同样只让存活的小在实际受伤后反雷。
+        if actual_damage > 0 && survived_hit && fire_state_key.is_some() {
+            self.rc_thunder_on_attack(target, caster, updates);
+        }
         was_alive
             && self
                 .entities
@@ -889,6 +894,7 @@ impl CombatRuntime {
         let actual_damage = amount.max(0).min(target_entity.runtime.hp.max(0));
         target_entity.runtime.hp = (target_entity.runtime.hp - amount).max(0);
         let was_alive = target_entity.runtime.alive;
+        let survived_hit = target_entity.runtime.hp > 0;
         self.record_squall_damage(caster, target, actual_damage);
         updates.add_with(|| RuntimeFrame::legacy_damage_update(caster.0 as usize, target.0 as usize, amount));
         if amount > 0 {
@@ -896,6 +902,10 @@ impl CombatRuntime {
         }
         self.relay_quilt_damage(caster, target, amount, updates);
         self.drain_plain_post_damage_skill_chain_into(target, amount, caster, updates);
+        // 火球与净化走独立扣血入口，同样只让存活的小在实际受伤后反雷。
+        if actual_damage > 0 && survived_hit {
+            self.rc_thunder_on_attack(target, caster, updates);
+        }
         was_alive
             && self
                 .entities
