@@ -118,6 +118,11 @@ impl CombatRuntime {
         defend_value: &mut RuntimeDefendValue,
         on_damage: PlainAttackOnDamage,
     ) {
+        // 法术与专属攻击共用的前防御入口，禁止目盲攻击触发反击或命中回调。
+        if self.miss_squad_blinded_attack(defend_value.caster(), target, updates) {
+            defend_value.set_atp(0.0);
+            return;
+        }
         self.remaining_pre_defend(target, defend_value, updates);
         self.pcb_letty_shield(target, updates);
         // 大妖精支付自己的反射消耗，成功后本次入射威力归零。
@@ -1032,6 +1037,10 @@ impl CombatRuntime {
 
     /// 魔法攻击的回避判定，取施法者魔法命中与目标魔法闪避。
     pub fn magic_attack_dodged(&mut self, caster: EntityIdx, target: EntityIdx) -> bool {
+        // 控制类法术也无法绕过闪光目盲，目标冻结时同样失效。
+        if caster != target && self.squad_attack_blinded(caster) {
+            return true;
+        }
         let Some(target_entity) = self.entities.get(target) else {
             panic!("unknown runtime magic attack dodge target entity: {}", target.0);
         };

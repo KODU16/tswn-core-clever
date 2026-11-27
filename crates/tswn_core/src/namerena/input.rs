@@ -211,21 +211,24 @@ pub fn expand_boss_squads(groups: &[Vec<String>]) -> Vec<Vec<String>> {
         .iter()
         .map(|group| {
             let mut expanded = Vec::new();
-            let mut emitted = [false; 2];
+            // 普通与下划线备份分别去重，允许两种难度同时出战。
+            let mut emitted = [false; 4];
             for raw in group {
                 let identity = raw.trim().split('+').next().unwrap_or("");
                 let squad = match identity {
-                    "fox@!" | "fox1@!" | "fox2@!" | "fox3@!" | "fox4@!" => Some(("fox", 0)),
-                    "ribbit@!" | "ribbit1@!" | "ribbit2@!" | "ribbit3@!" | "ribbit4@!" => Some(("ribbit", 1)),
+                    "fox@!" | "fox1@!" | "fox2@!" | "fox3@!" | "fox4@!" => Some(("fox", "", 0)),
+                    "ribbit@!" | "ribbit1@!" | "ribbit2@!" | "ribbit3@!" | "ribbit4@!" => Some(("ribbit", "", 1)),
+                    "fox_@!" | "fox1_@!" | "fox2_@!" | "fox3_@!" | "fox4_@!" => Some(("fox", "_", 2)),
+                    "ribbit_@!" | "ribbit1_@!" | "ribbit2_@!" | "ribbit3_@!" | "ribbit4_@!" => Some(("ribbit", "_", 3)),
                     _ => None,
                 };
-                if let Some((squad, index)) = squad {
+                if let Some((squad, suffix, index)) = squad {
                     if emitted[index] {
                         continue;
                     }
                     emitted[index] = true;
                     for i in 1..=4 {
-                        let member = format!("{squad}{i}@!");
+                        let member = format!("{squad}{i}{suffix}@!");
                         let original = group.iter().find(|line| line.trim().split('+').next() == Some(member.as_str()));
                         expanded.push(original.cloned().unwrap_or(member));
                     }
@@ -277,7 +280,7 @@ fn canonical_player_input(raw: &str) -> &str {
 /// 按名字与队伍后缀分类玩家：Boss / Boost / Seed / TestEx / Test1 / Test2 / Normal。
 fn classify(name: &str, team: Option<&str>) -> PlayerClass {
     match team {
-        Some("!") if BOSS_NAMES.contains(&name) => PlayerClass::Boss,
+        Some("!") if BOSS_NAMES.contains(&super::boss_combat_name(name)) => PlayerClass::Boss,
         Some("!") if BOOST_NAMES.contains(&name) => PlayerClass::Boost,
         Some("!") if name.starts_with(SEED_PREFIX) => PlayerClass::Seed,
         Some("!") => PlayerClass::TestEx,

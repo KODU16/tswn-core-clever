@@ -361,6 +361,12 @@ impl CustomBed2Import {
                         raw: raw.clone(),
                         message: "native namerena importer returned no player".to_owned(),
                     })?;
+                    // 备份只区分难度，机制名沿用对应成员。
+                    let runtime_name = if player.name.ends_with('_') {
+                        player.combat_name().to_owned()
+                    } else {
+                        player.name.clone()
+                    };
                     let status = player.status;
                     // 冴月麟参考属性允许负攻击；其余导入仍保持原有的非负约束。
                     let signed_rin =
@@ -376,7 +382,7 @@ impl CustomBed2Import {
                             ),
                         });
                     }
-                    PlayerTemplate::new(next_id, player.name, team_index, status.max_hp, status.attack)
+                    PlayerTemplate::new(next_id, runtime_name, team_index, status.max_hp, status.attack)
                         .with_identity_names(player.id_key_name, player.clan_name)
                         .with_display_name(player.display_name)
                         .with_magic(status.magic)

@@ -22,10 +22,14 @@ pub struct RosmonticRuntime {
     pub locked_turns: u16,
     pub locked_divisor: u16,
     pub blind_turns: u16,
-    pub blind_divisor: u16,
+
     pub anger_turns: u16,
     pub taunt_turns: u16,
     pub power_bits: u64,
+    /// 小队的基础威力乘区独立于战斗增益，召唤物沿归属继承。
+    pub squad_power_bits: u64,
+    /// 闪光持续行动数；零值兼容参考版的三次行动。
+    pub squad_blind_duration: u16,
     pub attract_scale_bits: u64,
     /// 专属技能按参考槽号保存等级，动态降级和一次性技能随快照复制。
     pub levels: Vec<i32>,
@@ -74,6 +78,19 @@ pub struct RosmonticRuntime {
 }
 
 impl RosmonticRuntime {
+    /// 难度参数只在初始化时读取，随后与战斗快照一起复制和重置。
+    pub fn with_squad_balance(mut self, identity: &str) -> Self {
+        if let Some(balance) = crate::namerena::boss_squad_balance(identity.split('@').next().unwrap_or(identity)) {
+            self.squad_power_bits = if balance.power_scale == 1.0 {
+                0
+            } else {
+                balance.power_scale.to_bits()
+            };
+            self.squad_blind_duration = balance.blind_duration;
+        }
+        self
+    }
+
     /// 固定槽位与参考实现一致，动态熟练度随快照保存。
     pub fn for_boss(name: &str) -> Self {
         let levels: &[i32] = match name {

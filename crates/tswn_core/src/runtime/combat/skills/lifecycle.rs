@@ -238,7 +238,9 @@ impl CombatRuntime {
                 target_entity.is_active(),
             )
         };
-        let immune = self.remaining_child_immune(target, "slow")
+        // 目盲优先于蓄力必中和目标是否可行动。
+        let immune = self.squad_attack_blinded(actor)
+            || self.remaining_child_immune(target, "slow")
             || if target_flags.contains(PlayerKindFlags::BOOST) {
                 self.rng.r127() < crate::namerena::boost_value(&target_name)
             } else if target_flags.contains(PlayerKindFlags::BOSS) {
@@ -492,7 +494,10 @@ impl CombatRuntime {
             } else {
                 false
             };
-        let dodged = immune || (target_active && self.roll_plain_dodge(target, caster_magic, target_resistance, false));
+        // 附体同样需要命中，不会绕过目盲。
+        let dodged = self.squad_attack_blinded(actor)
+            || immune
+            || (target_active && self.roll_plain_dodge(target, caster_magic, target_resistance, false));
         #[cfg(not(feature = "no_debug"))]
         if crate::debug::probe_possess().is_some() {
             eprintln!(

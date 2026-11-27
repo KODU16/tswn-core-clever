@@ -259,7 +259,7 @@ impl CombatRuntime {
             s.burn_owner = None;
             s.burn_turns = 0;
             s.blind_turns = 0;
-            s.blind_divisor = 0;
+
             s.locked_turns = 0;
             s.locked_divisor = 0;
             s.anger_turns = 0;

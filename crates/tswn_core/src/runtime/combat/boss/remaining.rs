@@ -4,11 +4,14 @@ impl CombatRuntime {
     /// 支援只在自己的战斗队伍内找人，避免两边同名 Boss 串队。
     pub(super) fn squad_member(&self, actor: EntityIdx, name: &str) -> Option<EntityIdx> {
         let team = self.plain_effective_team(actor);
+        // 同队可同时放入两种难度，部署与复活只关联对应版本。
+        let original = self.entities.get(actor).is_some_and(|e| e.template.id_key_name.ends_with("_@!"));
         self.entities
             .iter()
             .find(|(id, e)| {
                 self.plain_effective_team(*id) == team
                     && e.template.name == name
+                    && e.template.id_key_name.ends_with("_@!") == original
                     && e.runtime.flags.contains(PlayerKindFlags::BOSS)
             })
             .map(|(id, _)| id)
@@ -46,6 +49,10 @@ impl CombatRuntime {
         self.entities.get_mut(actor).unwrap().runtime.move_state.speed_points += points;
     }
     pub(super) fn squad_blind(&mut self, actor: EntityIdx, target: EntityIdx, updates: &mut RunUpdates) -> bool {
+        // 闪光本身也需要命中；目盲期间不能再向对手施加目盲。
+        if self.miss_squad_blinded_attack(actor, target, updates) {
+            return false;
+        }
         // 队长的 FOXTROT 用攻击对敏捷与速度，其余闪光用魔法对抗性。
         let physical = self.is_rosmontic_boss(actor, "fox1");
         let r = &self.entities.get(actor).unwrap().runtime;
@@ -57,13 +64,16 @@ impl CombatRuntime {
         if self.roll_plain_dodge(target, a, r.agility + if physical { r.speed } else { r.resistance }, false) {
             return false;
         }
+        let duration = self.entities.get(actor).and_then(|e| e.runtime.rosmontic.as_ref()).map_or(3, |s| {
+            if s.squad_blind_duration == 0 {
+                3
+            } else {
+                s.squad_blind_duration
+            }
+        });
         let s = self.ros_state(target);
-        s.blind_turns = s.blind_turns.saturating_add(3);
-        s.blind_divisor = if s.blind_divisor == 0 {
-            10
-        } else {
-            s.blind_divisor.saturating_add(10)
-        };
+        s.blind_turns = s.blind_turns.saturating_add(duration);
+
         self.entities.get_mut(target).unwrap().refresh_runtime_stats_from_template();
         self.ros_message(actor, target, "[1]陷入[目盲]", updates);
         true

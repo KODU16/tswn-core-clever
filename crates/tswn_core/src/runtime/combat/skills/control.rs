@@ -46,7 +46,9 @@ impl CombatRuntime {
                 target_entity.is_active(),
             )
         };
-        let immune = self.remaining_child_immune(target, "half")
+        // 目盲优先于蓄力必中和目标是否可行动。
+        let immune = self.squad_attack_blinded(actor)
+            || self.remaining_child_immune(target, "half")
             || if target_flags.contains(PlayerKindFlags::BOOST) {
                 self.rng.r127() < crate::namerena::boost_value(&target_name)
             } else if target_flags.contains(PlayerKindFlags::BOSS) {
@@ -620,7 +622,9 @@ impl CombatRuntime {
                 )
             })
             .unwrap_or_else(|| panic!("unknown runtime exchange target: {}", target.0));
-        let immune = self.remaining_child_immune(target, "exchange")
+        // 目盲优先于蓄力必中和目标是否可行动。
+        let immune = self.squad_attack_blinded(actor)
+            || self.remaining_child_immune(target, "exchange")
             || if target_flags.contains(PlayerKindFlags::BOOST) {
                 self.rng.r127() < crate::namerena::boost_value(&target_name)
             } else if target_flags.contains(PlayerKindFlags::BOSS) {

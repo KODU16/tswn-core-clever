@@ -600,7 +600,7 @@ impl PlayerBuild {
         }
         // 东方角色采用固定八围；行动速度保留原版 +160 基值。
         if self.class == PlayerClass::Boss
-            && let Some(fixed) = match self.name.as_str() {
+            && let Some(fixed) = match boss_combat_name(&self.name) {
                 "reimu" => Some([44, 59, 35, 44, 54, 59, 59, 1000]),
                 "marisa" => Some([44, 39, 57, 49, 64, 54, 63, 860]),
                 "daiyousei" => Some([30, 44, 46, 49, 41, 49, 54, 1200]),
@@ -632,6 +632,12 @@ impl PlayerBuild {
         {
             self.name_factor = 0.0;
             attrs = fixed;
+            // 只调整兔狐普通入口，隐藏备份仍使用完整参考八围。
+            if let Some(balance) = super::boss_squad_balance(&self.name) {
+                for attr in &mut attrs {
+                    *attr = (f64::from(*attr) * balance.attr_scale).round().max(1.0) as u32;
+                }
+            }
             status = status_from_attrs(attrs, 0.0, true);
             status.speed = attrs[2] as i32 + 160;
         }

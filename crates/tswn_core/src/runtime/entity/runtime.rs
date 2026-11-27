@@ -321,7 +321,7 @@ impl PlayerRuntime {
                         | "ribbit3"
                         | "ribbit4"
                 ))
-            .then(|| Box::new(RosmonticRuntime::for_boss(&template.name))),
+            .then(|| Box::new(RosmonticRuntime::for_boss(&template.name).with_squad_balance(&template.id_key_name))),
             cirno: (flags.contains(PlayerKindFlags::BOSS) && template.name == crate::runtime::combat::boss::cirno::ID)
                 .then(|| Box::new(CirnoRuntime::default())),
             fish: (flags.contains(PlayerKindFlags::BOSS) && template.name == "Shabby_fish")
@@ -488,7 +488,13 @@ impl PlayerRuntime {
             atk,
         ) as f64;
         let b = median_i32_3(randomer.r63() as i32 + 64, randomer.r63() as i32 + 64, atk + 64) as f64;
-        let at = a * b * self.at_boost();
+        // 数值难度独立于部署、蓄力等增益，普攻与专属攻击都使用同一乘区。
+        let squad_scale = self
+            .rosmontic
+            .as_ref()
+            .filter(|s| s.squad_power_bits != 0)
+            .map_or(1.0, |s| f64::from_bits(s.squad_power_bits));
+        let at = a * b * self.at_boost() * squad_scale;
         // 能力卡在攻击力之后独立乘算，不额外消耗随机流。
         #[cfg(feature = "cards")]
         let at = at * crate::runtime::forced_action::attack_multiplier(self.root_owner.0);
@@ -741,11 +747,7 @@ impl EntityRecord {
                 let base = if s.zero_stat_mask & (1 << i) != 0 { 0 } else { *value };
                 *value = (f64::from(base) * factor) as i32 + s.stat_add[i];
             }
-            if s.blind_turns > 0 {
-                r.agility /= i32::from(s.blind_divisor.max(1));
-                r.attack = (f64::from(r.attack) / 1.5) as i32;
-                r.magic = (f64::from(r.magic) / 1.5) as i32;
-            }
+
             if s.locked_turns > 0 {
                 r.defense /= i32::from(s.locked_divisor.max(1));
                 r.resistance /= i32::from(s.locked_divisor.max(1));

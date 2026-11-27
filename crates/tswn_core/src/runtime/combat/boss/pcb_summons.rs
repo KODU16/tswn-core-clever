@@ -12,6 +12,13 @@ impl CombatRuntime {
         attract: f64,
         updates: &mut RunUpdates,
     ) -> EntityIdx {
+        // 机械支援继承小队的数值难度，其他召唤物保持默认乘区。
+        let squad_scale = self.squad_power_scale(actor);
+        let blind_duration = self
+            .entities
+            .get(actor)
+            .and_then(|e| e.runtime.rosmontic.as_ref())
+            .map_or(0, |s| s.squad_blind_duration);
         let owner = self.entities.get(actor).unwrap();
         let mut template = self.preview_plain_minion_blueprint(actor, crate::namerena::MinionKind::Shadow).unwrap();
         template.name = format!("{}?shadow", owner.template.name);
@@ -45,6 +52,8 @@ impl CombatRuntime {
         child.runtime.policies.damage_share = DamageSharePolicy::None;
         let mut state = RosmonticRuntime {
             child_kind: role,
+            squad_power_bits: if squad_scale == 1.0 { 0 } else { squad_scale.to_bits() },
+            squad_blind_duration: blind_duration,
             ..Default::default()
         };
         if role == 4 {

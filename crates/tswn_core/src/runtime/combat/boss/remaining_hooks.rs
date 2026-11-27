@@ -1,6 +1,41 @@
 //! 最后一批 Boss 的指令、减伤和分阶段复活，反击标记阻断递归。
 use super::super::*;
 impl CombatRuntime {
+    /// 沿真实召唤归属读取难度乘区，避免固定威力反击和召唤物漏掉数值调整。
+    pub(crate) fn squad_power_scale(&self, mut actor: EntityIdx) -> f64 {
+        for _ in 0..self.entities.len() {
+            let Some(e) = self.entities.get(actor) else {
+                break;
+            };
+            if let Some(s) = &e.runtime.rosmontic {
+                if s.squad_power_bits != 0 {
+                    return f64::from_bits(s.squad_power_bits);
+                }
+            }
+            if e.runtime.owner == actor {
+                break;
+            }
+            actor = e.runtime.owner;
+        }
+        1.0
+    }
+
+    /// 闪光目盲只让攻击落空，不拦截行动、治疗或召唤。
+    pub(crate) fn squad_attack_blinded(&self, actor: EntityIdx) -> bool {
+        self.entities
+            .get(actor)
+            .and_then(|e| e.runtime.rosmontic.as_ref())
+            .is_some_and(|s| s.blind_turns > 0)
+    }
+    /// 必中攻击同样受目盲限制；自损消耗与已经挂上的持续伤害不经过此入口。
+    pub(crate) fn miss_squad_blinded_attack(&self, actor: EntityIdx, target: EntityIdx, u: &mut RunUpdates) -> bool {
+        if actor == target || !self.squad_attack_blinded(actor) {
+            return false;
+        }
+        u.add_with(|| RuntimeFrame::replay_update(actor.0 as usize, target.0 as usize, "[0]因[目盲]未命中[1]", 20));
+        true
+    }
+
     /// 机械和伙伴使用各自的强免疫名单，不把召唤物伪装成 Boss。
     pub(crate) fn remaining_child_immune(&mut self, target: EntityIdx, key: &str) -> bool {
         let role = self
@@ -154,9 +189,7 @@ impl CombatRuntime {
                 }
             }
         }
-        if s.blind_turns == 0 {
-            s.blind_divisor = 0;
-        }
+
         if s.locked_turns == 0 {
             s.locked_divisor = 0;
         }
@@ -188,7 +221,15 @@ impl CombatRuntime {
             self.ros_state(t).countering = true;
             v.set_atp(0.0);
             self.rosmontic_message(t, "[0]被引爆", u);
-            self.ros_hit(t, v.caster(), false, 19200.0, false, PlainAttackOnDamage::None, u);
+            self.ros_hit(
+                t,
+                v.caster(),
+                false,
+                19200.0 * self.squad_power_scale(t),
+                false,
+                PlainAttackOnDamage::None,
+                u,
+            );
             self.entities.get_mut(t).unwrap().runtime.hp = 0;
             self.drain_plain_lethal_damage_into(t, t, u);
         }
@@ -259,7 +300,15 @@ impl CombatRuntime {
             if damage > 0 && !counter && !counter_active && (anger || self.rng.next_u8() & 3 == 0) {
                 self.ros_state(t).countering = true;
                 self.rosmontic_message(t, "[0]进行[反制速射]", u);
-                self.ros_hit(t, a, false, 14400.0, false, PlainAttackOnDamage::None, u);
+                self.ros_hit(
+                    t,
+                    a,
+                    false,
+                    14400.0 * self.squad_power_scale(t),
+                    false,
+                    PlainAttackOnDamage::None,
+                    u,
+                );
                 self.ros_state(t).countering = false;
             }
             v.set_damage(if self.entities.get(a).is_some_and(|e| e.runtime.hp <= 0) {
@@ -284,7 +333,15 @@ impl CombatRuntime {
                 self.ros_power(t, 2.0, 0.0);
                 self.rosmontic_message(t, "[0]发动[死线反击]", u);
                 if !counter_active {
-                    self.ros_hit(t, a, false, 19200.0, false, PlainAttackOnDamage::None, u);
+                    self.ros_hit(
+                        t,
+                        a,
+                        false,
+                        19200.0 * self.squad_power_scale(t),
+                        false,
+                        PlainAttackOnDamage::None,
+                        u,
+                    );
                 }
                 self.ros_state(t).countering = false;
                 return true;

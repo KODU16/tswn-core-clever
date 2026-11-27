@@ -85,9 +85,9 @@ fn boss_icon(raw_name: &str) -> Option<&'static [u8]> {
     }
     // 整队入口沿用队长徽章，成员仍显示各自原图。
     let name = match name {
-        "fox" => "fox1",
-        "ribbit" => "ribbit1",
-        _ => name,
+        "fox" | "fox_" => "fox1",
+        "ribbit" | "ribbit_" => "ribbit1",
+        _ => super::boss_combat_name(name),
     };
     // Rosmontic 图标仅绑定 Boss 修饰符，普通同名角色继续使用生成图标。
     const ROSMONTIC_NAMES: [&str; 30] = [

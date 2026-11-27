@@ -248,7 +248,8 @@ impl CombatRuntime {
                         20,
                     ));
                     // 不掷普通闪避，但 Boss 或强化目标仍可免疫净化。免疫不进入 POST_DEFEND。
-                    if self.status_immune(target, "disperse") {
+                    // 净化虽跳过普通回避，也不能在目盲时命中。
+                    if self.squad_attack_blinded(caster) || self.status_immune(target, "disperse") {
                         updates.add(RuntimeFrame::replay_update(
                             target.0 as usize,
                             caster.0 as usize,

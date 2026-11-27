@@ -626,6 +626,10 @@ impl CombatRuntime {
         on_damage: PlainAttackOnDamage,
         updates: &mut RunUpdates,
     ) -> i32 {
+        // 在快速伤害路径和防御钩子之前统一拦截目盲攻击。
+        if self.miss_squad_blinded_attack(actor, target, updates) {
+            return 0;
+        }
         let passive_decisions = self.control.passive_decision_mode();
         let batch_id = if cfg!(feature = "no_debug") && !updates.capture_updates && !passive_decisions {
             // 自动结算不会读取伤害决策栈，只推进编号以便后续交互沿用相同批次号。
@@ -800,6 +804,10 @@ impl CombatRuntime {
         on_damage: PlainAttackOnDamage,
         updates: &mut RunUpdates,
     ) -> i32 {
+        // 跳过普通回避的必中攻击仍会因目盲落空。
+        if self.miss_squad_blinded_attack(actor, target, updates) {
+            return 0;
+        }
         #[cfg(not(feature = "no_debug"))]
         let debug_attack = self.probe_default_attack_matches(actor);
         let defense = {

@@ -62,25 +62,67 @@ pub const BOSS_NAMES: [&str; 52] = [
 /// 加成角色名字表；对应 [`boost_value`] 的加成来源。
 pub const BOOST_NAMES: [&str; 3] = ["云剑狄卡敢", "云剑穸跄祇", "田一人"];
 
-/// Boss 战斗名归一化：埼玉统一为小写，其余原样返回。
+/// Boss 战斗名归一化：隐藏的小队备份沿用对应成员的机制与图标。
 pub fn boss_combat_name(name: &str) -> &str {
     match name {
         SAITAMA_RETIREMENT_WINNER => "saitama",
+        "fox1_" => "fox1",
+        "fox2_" => "fox2",
+        "fox3_" => "fox3",
+        "fox4_" => "fox4",
+        "ribbit1_" => "ribbit1",
+        "ribbit2_" => "ribbit2",
+        "ribbit3_" => "ribbit3",
+        "ribbit4_" => "ribbit4",
         _ => name,
     }
 }
 
-/// Boss 身份覆盖：仅埼玉返回固定小写身份。
+/// 备份使用原角色的随机流身份，确保仅数值配置区分难度。
 pub fn boss_combat_identity_override(identity: &str) -> Option<&'static str> {
     match identity {
         "SAITAMA@!" => Some("saitama@!"),
+        "fox1_@!" => Some("fox1@!"),
+        "fox2_@!" => Some("fox2@!"),
+        "fox3_@!" => Some("fox3@!"),
+        "fox4_@!" => Some("fox4@!"),
+        "ribbit1_@!" => Some("ribbit1@!"),
+        "ribbit2_@!" => Some("ribbit2@!"),
+        "ribbit3_@!" => Some("ribbit3@!"),
+        "ribbit4_@!" => Some("ribbit4@!"),
         _ => None,
     }
 }
 
+/// 同一小队只按难度入口选择数值，完全不读取对手名字。
+#[derive(Debug, Clone, Copy)]
+pub struct BossSquadBalance {
+    pub attr_scale: f64,
+    pub power_scale: f64,
+    pub blind_duration: u16,
+}
+
+/// 下划线成员保留参考数值；普通成员使用经过独立 seed 验证的挑战难度。
+pub fn boss_squad_balance(name: &str) -> Option<BossSquadBalance> {
+    let power_scale = match name {
+        "fox1" | "fox2" | "fox3" | "fox4" => 0.0535,
+        "ribbit1" | "ribbit2" | "ribbit3" | "ribbit4" => 0.20,
+        "fox1_" | "fox2_" | "fox3_" | "fox4_" | "ribbit1_" | "ribbit2_" | "ribbit3_" | "ribbit4_" => 1.0,
+        _ => return None,
+    };
+    let original = name.ends_with('_');
+    Some(BossSquadBalance {
+        attr_scale: if original { 1.0 } else { 0.22 },
+        power_scale,
+        blind_duration: if original { 3 } else { 1 },
+    })
+}
+
 /// Boss 的中文展示名；未知名按原名返回。
 pub fn boss_display_name(name: &str) -> &str {
-    match name {
+    // 只归一化隐藏备份，保留既有大写身份的展示约定。
+    let display_key = if name.ends_with('_') { boss_combat_name(name) } else { name };
+    match display_key {
         "mario" => "马里奥",
         "sonic" => "索尼克",
         "mosquito" => "蚊",

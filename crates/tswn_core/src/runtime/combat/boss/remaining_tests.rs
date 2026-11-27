@@ -195,9 +195,104 @@ fn ribbit_breakthrough_keeps_zero_defense_after_refresh() {
     let rt = r.runtime_mut();
     let mut u = RunUpdates::new();
     rt.remaining_cast(a, 0, false, &mut u);
-    rt.entities.get_mut(a).unwrap().runtime.hp = 100;
+    // 使用生命比例触发突破，兼容普通与备份不同的生命上限。
+    let hp = rt.entities.get(a).unwrap().template.max_hp / 4;
+    rt.entities.get_mut(a).unwrap().runtime.hp = hp;
     rt.begin_remaining_action(a, &mut u);
     assert_eq!(rt.entities.get(a).unwrap().runtime.defense, 0);
     rt.entities.get_mut(a).unwrap().refresh_runtime_stats_from_template();
     assert_eq!(rt.entities.get(a).unwrap().runtime.defense, 0);
+}
+
+/// 目盲不跳过行动：普攻、法术、必中和瘟疫均落空，仍可蓄力。
+#[test]
+fn squad_blind_misses_attacks_but_allows_support_and_expires() {
+    let mut r = battle("fox_@!\n\nalpha\nbeta");
+    let f = id(&r, "fox1");
+    let a = id(&r, "alpha");
+    let b = id(&r, "beta");
+    let rt = r.runtime_mut();
+    let mut u = RunUpdates::new();
+    let agility = rt.entities.get(a).unwrap().runtime.agility;
+    for _ in 0..256 {
+        if rt.squad_blind(f, a, &mut u) {
+            break;
+        }
+    }
+    assert_eq!(rt.ros_state(a).blind_turns, 3);
+    assert!(!rt.entities.get(a).unwrap().states.is_frozen());
+    assert_eq!(rt.entities.get(a).unwrap().runtime.agility, agility);
+    let hp = rt.entities.get(b).unwrap().runtime.hp;
+    for magic in [false, true] {
+        assert_eq!(rt.ros_hit(a, b, magic, 10000.0, false, PlainAttackOnDamage::None, &mut u), 0);
+        assert_eq!(rt.ros_hit(a, b, magic, 10000.0, true, PlainAttackOnDamage::None, &mut u), 0);
+    }
+    rt.drain_plain_half_skill_into(a, b, &mut u);
+    rt.drain_plain_disperse_skill_into(a, b, &mut u);
+    rt.drain_plain_thunder_skill_into(a, b, &mut u);
+    let team = rt.plain_effective_team(b);
+    rt.drain_plain_charm_skill_into(a, b, &mut u);
+    assert_eq!(rt.plain_effective_team(b), team);
+    assert!(rt.magic_attack_dodged(a, b));
+    assert_eq!(rt.entities.get(b).unwrap().runtime.hp, hp);
+    rt.drain_plain_charge_skill_into(a, &mut u);
+    assert!(rt.entities.get(a).unwrap().runtime.charge.active);
+    for expected in [2, 1, 0] {
+        rt.end_remaining_action(a);
+        assert_eq!(rt.ros_state(a).blind_turns, expected);
+    }
+    assert!(rt.ros_hit(a, b, false, 10000.0, true, PlainAttackOnDamage::None, &mut u) > 0);
+}
+
+/// 隐藏备份仍是完整 Boss 队伍，保留原数值、图标与部署归属。
+#[test]
+fn original_squad_aliases_preserve_stats_and_isolate_same_team_members() {
+    for (prefix, hp) in [("fox", [660, 670, 730, 550]), ("ribbit", [670, 720, 540, 530])] {
+        let mut r = battle(&format!("{prefix}@!\n{prefix}_@!\n{prefix}2_@!\n\nalpha"));
+        assert_eq!(r.runtime().entities.len(), 9);
+        let backups: Vec<_> = r
+            .runtime()
+            .entities
+            .iter()
+            .filter(|(_, e)| e.template.id_key_name.ends_with("_@!"))
+            .map(|(id, e)| (id, e.template.max_hp))
+            .collect();
+        assert_eq!(backups.iter().map(|(_, hp)| *hp).collect::<Vec<_>>(), hp);
+        for (id, _) in &backups {
+            assert_eq!(r.runtime().squad_power_scale(*id), 1.0);
+        }
+        let leader = backups[0].0;
+        let regular = id(&r, &format!("{prefix}1"));
+        let rt = r.runtime_mut();
+        assert_eq!(rt.squad_member(leader, &format!("{prefix}2")), Some(backups[1].0));
+        assert_ne!(rt.squad_member(regular, &format!("{prefix}2")), Some(backups[1].0));
+        let mut u = RunUpdates::new();
+        rt.remaining_cast(leader, 0, false, &mut u);
+        assert!(!rt.ros_state(regular).deployed);
+        let icon = crate::namerena::icon_render::render_icon_vec_from_name(&format!("{prefix}_@!"));
+        assert_eq!(
+            icon,
+            crate::namerena::icon_render::render_icon_vec_from_name(&format!("{prefix}1@!"))
+        );
+    }
+}
+/// 目盲回合仍产生真实行动，持续数在自己的行动结束后减少。
+#[test]
+fn blinded_player_still_takes_a_normal_turn() {
+    let mut r = battle("alpha\n\nbeta");
+    let a = id(&r, "alpha");
+    let b = id(&r, "beta");
+    let rt = r.runtime_mut();
+    let hp = rt.entities.get(b).unwrap().runtime.hp;
+    let e = rt.entities.get_mut(a).unwrap();
+    e.template.skills = SkillLoadout::default();
+    e.runtime.move_state.speed_points = 1000000;
+    rt.ros_state(a).blind_turns = 1;
+    let out = r.run_round();
+    assert_eq!(out.action.unwrap().actor, a);
+    assert_eq!(r.runtime().entities.get(b).unwrap().runtime.hp, hp);
+    assert_eq!(
+        r.runtime().entities.get(a).unwrap().runtime.rosmontic.as_ref().unwrap().blind_turns,
+        0
+    );
 }

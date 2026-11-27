@@ -584,7 +584,7 @@ impl PreparedBattleRoster {
             // 两队队长拥有开场行动提前，避免部署晚于普通队员。
             let leader = self.players[player.0 as usize]
                 .as_ref()
-                .is_some_and(|p| matches!(p.template.id_key_name.as_str(), "fox1@!" | "ribbit1@!"));
+                .is_some_and(|p| matches!(p.template.name.as_str(), "fox1" | "ribbit1"));
             state.speed_points[player.0 as usize] = rng.r255() as i32 + if leader { 20480 } else { 0 };
         }
 

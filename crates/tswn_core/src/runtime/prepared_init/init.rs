@@ -442,7 +442,13 @@ impl PreparedBattleInit {
         skills: SkillLoadout,
     ) -> PlayerTemplate {
         let status = &player.status;
-        let mut template = PlayerTemplate::new(id, player.name.clone(), team, status.max_hp, status.attack)
+        // 备份保留输入身份，但使用对应角色的战斗机制名。
+        let runtime_name = if player.name.ends_with('_') {
+            player.combat_name()
+        } else {
+            &player.name
+        };
+        let mut template = PlayerTemplate::new(id, runtime_name, team, status.max_hp, status.attack)
             .with_identity_names(player.id_key_name.clone(), player.clan_name.clone())
             .with_display_name(player.display_name.clone())
             .with_magic(status.magic)
