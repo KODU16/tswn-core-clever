@@ -104,6 +104,61 @@ mod tests {
         assert!(field.scratch.search_turn.is_none());
     }
 
+    #[test]
+    fn skill_proficiency_gates_once_per_action_not_per_target() {
+        // 多个合法目标共享同一次技能概率判定，预览和正式执行复用相同随机流。
+        let config = default_custom_runtime_import_config().unwrap();
+        let fire = config.registry.skill_id_by_export_name(BuiltinActiveSkill::Fire.export_name()).unwrap();
+        let ice = config.registry.skill_id_by_export_name(BuiltinActiveSkill::Ice.export_name()).unwrap();
+        let trials = 4096;
+        for level in [0, 1, 32, 64, 128] {
+            let mut base = tactical_field();
+            base.entities.get_mut(EntityIdx(0)).unwrap().template.skills =
+                SkillLoadout::from_skill_levels([(fire, level), (ice, 64)]);
+            let mut opportunities = 0;
+            let mut fire_passes = 0;
+            let mut any_passes = 0;
+            for seed in 0..trials {
+                let mut field = base.clone();
+                field.rng = RC4::new(&(seed as u64).to_le_bytes(), 1);
+                let turn = field.search_turn_preview();
+                // 调度可能跳过本次行动，仅统计确实到达该角色决策点的机会。
+                if turn.actor != Some(EntityIdx(0)) {
+                    continue;
+                }
+                opportunities += 1;
+                let fire_candidates: Vec<_> = turn.candidates.iter().enumerate().filter(|(_, c)| {
+                    matches!(&c.action, PreparedPlainAction::BuiltinSkill(a) if a.selected.skill == BuiltinActiveSkill::Fire)
+                }).collect();
+                assert!(fire_candidates.is_empty() || fire_candidates.len() == 2);
+                fire_passes += usize::from(!fire_candidates.is_empty());
+                any_passes +=
+                    usize::from(turn.candidates.iter().any(|c| matches!(c.action, PreparedPlainAction::BuiltinSkill(_))));
+                if seed < 16 {
+                    let chosen = fire_candidates.first().map_or(0, |(i, _)| *i);
+                    field.scratch.search_turn = Some(SearchTurn::new(Some(chosen), None));
+                    field.run_minimal_round();
+                    let actual = field.scratch.search_turn.take().unwrap();
+                    assert_eq!(actual.candidates, turn.candidates);
+                }
+            }
+            let p = f64::from(level) / 128.0;
+            assert!(
+                (fire_passes as f64 / opportunities as f64 - p).abs() < 0.035,
+                "level {level}: {fire_passes}"
+            );
+            let expected_any = 1.0 - (1.0 - p) * 0.5;
+            assert!((any_passes as f64 / opportunities as f64 - expected_any).abs() < 0.035);
+            if level == 0 {
+                assert_eq!(fire_passes, 0);
+            }
+            if level == 128 {
+                assert!(opportunities > 4000);
+                assert_eq!(fire_passes, opportunities);
+            }
+        }
+    }
+
     fn charm_to(field: &mut CombatRuntime, id: EntityIdx, team: usize) {
         // 用真实状态容器登记，覆盖有效阵营解析而不修改原队伍。
         let mut entry = StateEntry::legacy(PLAIN_CHARM_STATE_KEY);

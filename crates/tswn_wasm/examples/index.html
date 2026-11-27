@@ -77,7 +77,7 @@
                 <div class="side-controls">
                     <label for="strategySelect">出招策略 </label>
                     <select id="strategySelect"><option value="legacy">原版策略（默认）</option><option value="search">Clever 学习模型（混合 v1）</option></select>
-                    <div class="input-note">默认双方采用所选策略。Clever 使用混合模型 v1（第 15 轮最佳权重）选择动作；未覆盖的专属技能场景回退旧 Clever，Boss 行动沿用原机制。</div>
+                    <div class="input-note">默认双方采用所选策略。Clever 使用混合模型 v1（第 15 轮最佳权重）选择动作；技能先按熟练度判定发动资格，再由模型选招和目标。未覆盖的专属技能场景回退旧 Clever，Boss 行动沿用原机制。</div>
                     <label class="checkbox-option"><input type="checkbox" id="scoreLegacyOpponents"><span>评分验证：仅被测侧及队友使用 Clever，对手使用原版</span></label>
                     <div class="input-note">仅对 Clever 评分生效；不勾选时双方均使用 Clever。与全员原版评分比较，评分差即提升量。</div>
                     <label class="boss-picker checkbox-option"><input type="checkbox" id="bossChallenge"><span>挑战 Boss</span></label>
@@ -255,6 +255,6 @@
     </div>
 
     <script type="module" src="./show-theme-compat.js?v=20261123squall2"></script>
-    <script type="module" src="./show.js?v=20261127ml1"></script>
+    <script type="module" src="./show.js?v=20261127ml2"></script>
 </body>
 </html>
