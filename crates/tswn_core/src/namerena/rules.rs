@@ -250,6 +250,8 @@ pub enum BossActionSkill {
     Tiger,
     /// 沙冰鱼的行动统一进入专属结算器。
     Fish,
+    /// 实验体的三阶段行动表统一进入专属结算器。
+    TestSubject,
     /// 琪露诺的冰属性连招统一进入专属结算器。
     Cirno,
     /// Rosmontic 的专属行动与蓄力。
@@ -260,6 +262,9 @@ pub enum BossActionSkill {
 ///
 /// `k4` 只收集 `ActionSkill` 实例，所以防御、反射等被动不会出现在这里；
 /// 马里奥的火球术初始等级为 0，吃到火焰花后由状态载荷改写为 120。
+///
+/// 实验体只有一个占位条目：它的招式由三阶段行动表决定，抽签与结算都在
+/// [`crate::runtime::combat::boss::testsubject`] 里完成，等级不参与判定。
 pub fn boss_action_skills(name: &str) -> &'static [(BossActionSkill, u32)] {
     match boss_combat_name(name) {
         "rc" => &[(BossActionSkill::Rc, 256)],
@@ -270,6 +275,7 @@ pub fn boss_action_skills(name: &str) -> &'static [(BossActionSkill, u32)] {
         "saitama" => &[(BossActionSkill::Saitama, 0)],
         "sonic" => &[(BossActionSkill::Rapid, 48), (BossActionSkill::Critical, 48)],
         "yuri" => &[(BossActionSkill::YuriControl, 256)],
+        "testsubject" => &[(BossActionSkill::TestSubject, 0)],
         _ => &[],
     }
 }
@@ -479,7 +485,7 @@ mod tests {
             &[(BossActionSkill::Rapid, 48), (BossActionSkill::Critical, 48)]
         );
         assert_eq!(boss_action_skills("yuri"), &[(BossActionSkill::YuriControl, 256)]);
-        for name in ["conan", "covid", "lazy", "slime", "testsubject", "thanos", "wheel", "unknown"] {
+        for name in ["conan", "covid", "lazy", "slime", "thanos", "wheel", "unknown"] {
             assert!(boss_action_skills(name).is_empty(), "{name} 的 k4 应为空");
         }
     }

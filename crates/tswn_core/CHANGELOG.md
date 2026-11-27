@@ -1,11 +1,20 @@
 # 更新日志
 
-## [Unreleased]
+## [0.8.0] - 2026-11-26
+
+- 魅惑到期改为同步解除，并让后行动链按 `MList.j` 的 `sortId` 做两级排序，统一所有状态 `POST_ACTION` 钩子的执行顺序（对齐 legacy `md5.js`）。
+- 冰冻自然解除后执行全量重算，覆盖解冻瞬间的属性与行动点提交，替代此前的增量路径。
+- 实验体（`testsubject@!`）三阶段招式选敌跟随本次行动的智慧检定（smart），与柯南等 Boss 的选敌口径统一。
 
 - 修复吞噬青雉、斑鸠、马里奥、蚊、索尼克、灭霸、生命之轮和尤里时的技能槽位错配。按原版槽序转移等级，保留 0 级占位，并取马里奥阵亡时的火球等级。
 - 核对 13 个原版 Boss、`SAITAMA@!` 和 Rinick 被吞噬时的技能等级、八围、MP 与行动点。以原版 0.5.5 对照 `rq=4` 和 `rq=6` 共 3,712 局，胜负一致，2,496 次吞噬事件在触发批次对齐。
 - 13 个原版 Boss 使用固定徽章；其他 `name@!` 玩家按自身名字生成徽章，含特殊身份的输入组和史莱姆子体按原版继承图标。PNG 和 RGBA 接口保持原格式。
 - 同公会的评分对局回退完整阵容构建时，先恢复场前实体，避免上局召唤物 ID 或状态泄漏到下一局。
+- 修正魅惑的「重魅」语义：目标的有效队伍应当**延迟**提交，而不是在重魅瞬间翻转。原版有三份队伍信息——`Plr.y`（实际归属，魅惑不搬动实体、不改存活名册与胜负）、`CharmState.r`（本次要求继承的队伍，重魅时立即更新）、`Plr.z`（已生效的 allyGroup）。`updateStates()` 先令 `z = y`，再遍历状态更新钩子，仍挂载的魅惑才把 `z` 赋为 `CharmState.r`。所以只有受术者本人执行完整重算、且魅惑仍挂载时，才从旧队翻到新队；别人的重算、普通行动、单独 `calcAttrSum`、施术者后来换队或死亡都不提交。
+- `drain_plain_charm_skill_into` 与 `drain_plain_yuri_control_into` 的「更换施魅者」分支现在只更新 `source_team_idx`（尤里另有 `old_step + max(3, 初始人数)` 的时长规则），保留目标当前的 `effective_team_idx`。首施仍立即生效并完整重算。对缺少该字段的旧载荷，先固化旧 `group_id` 的读取结果，避免改来源就提前换队。
+- 刷新挂点放在 `EntityRecord::apply_runtime_stats_from_template`，与疾走倍率的提交并列，同时覆盖 `refresh_runtime_stats_from_template()` 与 `apply_derived_stats()` 两条入口。不挂在 `add_entry`／`clear_legacy_key`／`set_payload`——那些是容器操作，不是原版的重算边界。
+- 净化边界：空净化或只卸护盾时**不**提交魅惑队伍；解除疾走或蓄力时**提交**（对应原版这两个状态的解除会调 `updateStates`）。
+- 回归测试覆盖：异源重魅后 `group / source / effective` 为 `2 / 2 / 0`、保护候选仍是旧施魅者；同源叠层不翻转；目标首次迟缓后变为 `2 / 2 / 2`、候选切到新施魅者；治愈解除后回实际队伍 `1`；尤里异源重魅另有独立断言；四种净化边界分别验证。
 
 ### 新增
 
@@ -13,6 +22,11 @@
 - 共享接线一并落地：`RunUpdate.dialogue` 与 `as_dialogue()`、`CombatRuntime.squall_bosses`、`apply_plain_slow_into`、`apply_squall_defense`、`begin_squall_action`／`finish_squall_action`、`record_squall_damage`、`dispel_squall_effects`、`record_smdd_hit`、`record_tiger_damage`、`baixie_mp_scale`、`prepared_init::template_from_name`、`PlainBossDefend::Quilt`，以及被子在 `attack`／`defense`／`round`／`skills_*` 十个文件里的选敌池与伤害传导触点。
 - 7 只 Boss 合计 44 个 `#[test]`。这些测试在原作者分支上从未被声明为模块（`combat/mod.rs` 缺 `mod boss_*_tests`），实际不参与编译；本次一并声明，全部通过。
 - `namerena/icon_render` 新增 `boss_badges` 模块：咦的 16×16 手画徽章 `YI_ICON`、被子一家的 `quilt_icon`（床、猴脸、鱼三种 Emoji），以及新 Boss 名字到徽章的映射规则。
+- 恢复「实验体」（`testsubject@!`）的完整技能实现。它在 2026-07-18 的 `3148727d`（升格 Runtime v2）中整包迁丢，`a234e609` 收尾时删掉了 641 行实现，2026-10-28 的 `6b47a4af` 只以纯数据形态加回属性与免疫、`boss_action_skills` 仍走 `_ => &[]`，于是退化成只会普攻的木桩（玩家反馈「变成最菜 boss，打不过普通号」）。现按旧实现完整复原：三阶段行动表（颅骨重击／多段爪击／割裂／大猛扑／燃烧咆哮）、易伤与无实体两个状态、两次复活与属性爬升 80/100 → 120/200 → 160/300。
+- 属性爬升采用「同步改写 `PlayerTemplate` + runtime」而非 state 钩子：新 Runtime 的运行态属性由 template 派生，`refresh_runtime_stats_from_template()` 会被隐匿、垂死、聚气、吞噬等机制反复触发，只改 runtime 会被下一次刷新静默抹平。与 `xjy_iron`／`fish_comfort` 的既有惯例一致。
+- 复活接入 `drain_die_hooks_into`，与马里奥同路径。钩子点位于 `emit_plain_lethal_replay_into` 之后、`alive = false` 与死亡记录之前；这个顺序由新增的 `die_hook_revives_before_death_is_recorded` 固化。
+- 命名上不再称它为「测试专用 Boss」——它是仓库自有的正式 Boss，误导性在注释里而不在标识符上。`testsubject@!` 输入名、`BOSS_NAMES` 键、`boss_display_name`、文案键全部保持不变，玩家侧零变更；`TestSubjectState` 改为 `TestSubjectRuntime`（新架构按 `xjy`／`tiger`／`fish` 惯例放 `PlayerRuntime` 字段），易伤与无实体并入 `StatePayload` 枚举。`docs/reviews/` 三篇里「兼容输入／无专属技能」的描述已同步纠正。
+- 17 个测试覆盖：身份与三阶段属性爬升、五档抽签阈值（含 `roll_skill(128)` 恒真因而二、三阶段不会回落普攻）、颅骨重击与易伤放大、多段爪击段数递增与迟缓、无实体受伤压制与奇偶轮换、两次异常再生与属性归零、复活钩子早于死亡记录。
 
 - `MAGIC_POINT_CAP` 定为 100。原作者在 `22c7af3e` 把它改成 128 并加了具名常量，但他的基线同样是 100；该上限作用于能量药水（+40）、蓄力返蓝（+32）与行动恢复这些普通对局也走的路径，改它会动既有行为对齐，而仓库里没有任何测试覆盖该上限。保留具名常量只为消除魔法数字，将来若确认原版规则是 128，改这一行即可。
 - 回放的 `ReplayTone::Dialogue` 投影未接。原作者在 `replay_view.rs` 与 `cli_api/battle/session.rs` 把 `update.dialogue` 投影成新 tone，但 `replay_tone_color()` 并不特殊处理它，渲染与 `Normal` 同色，收益纯装饰；代价却是 `tswn_py` 的 `replay_tone_to_str()` 是穷尽 match、加变体直接编译失败。`RunUpdate.dialogue` 与 `as_dialogue()` 已在位且有测试覆盖，投影随时可补。

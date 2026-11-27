@@ -31,6 +31,7 @@ pub mod smdd_tests;
 pub mod squall;
 #[cfg(test)]
 pub mod squall_tests;
+pub mod testsubject;
 pub mod thanos;
 pub mod tiger;
 #[cfg(test)]

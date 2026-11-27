@@ -48,6 +48,8 @@ pub enum StatePayloadKind {
     LazyBoss,
     LazyInfection,
     MarioBoss,
+    SkullFracture,
+    TestSubjectNoEntity,
 }
 
 impl StatePayloadKind {
@@ -75,6 +77,8 @@ impl StatePayloadKind {
             StatePayload::LazyBoss { .. } => Self::LazyBoss,
             StatePayload::LazyInfection { .. } => Self::LazyInfection,
             StatePayload::MarioBoss { .. } => Self::MarioBoss,
+            StatePayload::SkullFracture { .. } => Self::SkullFracture,
+            StatePayload::TestSubjectNoEntity => Self::TestSubjectNoEntity,
         }
     }
 }
@@ -189,7 +193,7 @@ impl StateStore {
         order
     }
 
-    pub fn register_charge_post_action(&mut self) { self.charge_post_action_cursor = self.next_runtime_registration_order; }
+    pub fn register_charge_post_action(&mut self) { self.charge_post_action_cursor = self.reserve_runtime_registration_order(); }
 
     pub fn charge_post_action_cursor(&self) -> u64 { self.charge_post_action_cursor }
 
@@ -283,6 +287,29 @@ impl StateStore {
         }
     }
 
+    /// 将仍挂载的魅惑来源队伍提交为有效队伍；缺失来源的兼容载荷保持原值。
+    pub fn refresh_effective_charm_team(&mut self) {
+        if !self.may_contain(StatePayloadKind::Charm) {
+            return;
+        }
+        let mut changed = false;
+        for entry in &mut self.entries {
+            if let StatePayload::Charm {
+                effective_team_idx,
+                source_team_idx: Some(source_team_idx),
+                ..
+            } = &mut entry.payload
+                && *effective_team_idx != Some(*source_team_idx)
+            {
+                *effective_team_idx = Some(*source_team_idx);
+                changed = true;
+            }
+        }
+        if changed {
+            self.generation = self.generation.wrapping_add(1);
+        }
+    }
+
     /// 应用诅咒倍率后的攻击总和。
     pub fn effective_atk_sum(&self, base_atk_sum: i32) -> i32 {
         if !self.may_contain(StatePayloadKind::Curse) {
@@ -349,7 +376,7 @@ impl StateStore {
         self.add_entry(StateEntry::ice(legacy_order_key, frozen_step));
     }
 
-    /// 行动前结算冰冻：返回 (剩余步数, 本次是否解除冰冻)。
+    /// 行动前结算冰冻：返回 (剩余步数, 本次是否解除冰冻)，解除后的派生属性由调用方重算。
     pub fn apply_ice_pre_step(&mut self, step: i32, move_points: i32) -> (i32, bool) {
         if step <= 0 || self.scheduler_state_flags & SCHEDULER_STATE_ICE == 0 {
             return (step, false);
@@ -375,9 +402,6 @@ impl StateStore {
                 self.clear_legacy_key(legacy_order_key),
                 "runtime ice state disappeared during pre-step"
             );
-            // legacy 清除冰冻后会调用 update_states；这一步也会让疾走等待生效的
-            // 强化倍率立即提交，不能只删除 Ice 状态。
-            self.refresh_effective_haste_faster();
             return (0, true);
         }
         (step, false)
@@ -409,7 +433,9 @@ impl StateStore {
                 | StatePayload::Haste { .. }
                 | StatePayload::Berserk { .. }
                 | StatePayload::Charm { .. }
-                | StatePayload::Slow { .. } => {
+                | StatePayload::Slow { .. }
+                | StatePayload::SkullFracture { .. }
+                | StatePayload::TestSubjectNoEntity => {
                     entry.payload = StatePayload::FireMagHalfSteps(1);
                 }
             }

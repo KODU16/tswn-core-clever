@@ -224,6 +224,127 @@ fn plain_charm_first_application_refreshes_pending_haste_multiplier() {
     assert!(target.states.entry(76).is_some());
 }
 
+/// 从当前 RC4 状态推进到下一次不会闪避的普通魅惑。
+fn cast_charm_with_hit(runtime: &mut CombatRuntime, caster: EntityIdx, target: EntityIdx, updates: &mut RunUpdates) {
+    let caster_magic = runtime.entities.get(caster).unwrap().runtime.magic;
+    let victim = &runtime.entities.get(target).unwrap().runtime;
+    let dodge_value = victim.agility + victim.resistance;
+    while PlayerRuntime::dodge(caster_magic, dodge_value, &mut runtime.rng.clone()) {
+        runtime.rng.next_u8();
+    }
+    runtime.drain_plain_charm_skill_into(caster, target, updates);
+}
+
+#[test]
+fn plain_charm_recharm_changes_source_before_effective_team() {
+    let config = default_custom_runtime_import_config().unwrap();
+    let heal = config.registry.skill_id_by_export_name(BuiltinActiveSkill::Heal.export_name()).unwrap();
+    let mut runtime = CombatRuntime::from_template(PreparedCombatTemplate::with_registry(
+        vec![
+            PlayerTemplate::new(1, "Alice", 0, 100, 3).with_magic(10_000),
+            PlayerTemplate::new(2, "Bob", 1, 100, 3),
+            PlayerTemplate::new(3, "Carol", 2, 100, 3)
+                .with_magic(10_000)
+                .with_skill_loadout(SkillLoadout::from_skill_levels([(heal, 64)])),
+        ],
+        config.registry,
+    ));
+    let [alice, bob, carol] = [EntityIdx(0), EntityIdx(1), EntityIdx(2)];
+    let charm_value = |runtime: &CombatRuntime| {
+        runtime
+            .entities
+            .get(bob)
+            .unwrap()
+            .states
+            .entry(PLAIN_CHARM_STATE_KEY)
+            .and_then(StateEntry::charm_value)
+    };
+    let mut updates = RunUpdates::new();
+
+    cast_charm_with_hit(&mut runtime, alice, bob, &mut updates);
+    assert_eq!(charm_value(&runtime), Some((0, Some(0), Some(0), Some(1), 1)));
+    assert_eq!(runtime.protect_target_candidates(bob), [alice]);
+
+    cast_charm_with_hit(&mut runtime, carol, bob, &mut updates);
+    assert_eq!(charm_value(&runtime), Some((2, Some(0), Some(2), Some(1), 1)));
+    assert_eq!(runtime.protect_target_candidates(bob), [alice]);
+
+    cast_charm_with_hit(&mut runtime, carol, bob, &mut updates);
+    assert_eq!(charm_value(&runtime), Some((2, Some(0), Some(2), Some(1), 2)));
+    assert_eq!(runtime.protect_target_candidates(bob), [alice]);
+
+    // 首次迟缓会重算 Bob 本人；这时才应用新来源。
+    runtime.apply_plain_slow_into(carol, bob, false, &mut updates);
+    assert_eq!(charm_value(&runtime), Some((2, Some(2), Some(2), Some(1), 2)));
+    assert_eq!(runtime.protect_target_candidates(bob), [carol]);
+
+    runtime.entities.get_mut(bob).unwrap().runtime.hp -= 1;
+    runtime.drain_plain_heal_skill_into(carol, 0, bob, &mut updates);
+    assert!(charm_value(&runtime).is_none());
+    assert_eq!(runtime.plain_effective_team(bob), 1);
+}
+
+#[test]
+fn plain_charm_only_commits_when_disperse_removes_an_update_state_hook() {
+    let config = default_custom_runtime_import_config().unwrap();
+    let charm = config.registry.state_id_by_export_name(DEFAULT_CORE_CHARM_STATE_EXPORT).unwrap();
+    let haste = config.registry.state_id_by_export_name(DEFAULT_CORE_HASTE_STATE_EXPORT).unwrap();
+    let mut runtime = CombatRuntime::from_template(PreparedCombatTemplate::with_registry(
+        vec![
+            PlayerTemplate::new(1, "Alice", 0, 100, 3),
+            PlayerTemplate::new(2, "Bob", 1, 100, 3),
+            PlayerTemplate::new(3, "Carol", 2, 100, 3),
+        ],
+        config.registry,
+    ));
+    let [alice, bob, carol] = [EntityIdx(0), EntityIdx(1), EntityIdx(2)];
+    let owner = runtime.entities.get_mut(bob).unwrap();
+    owner.states.add_entry(StateEntry::charm(
+        PLAIN_CHARM_STATE_KEY,
+        charm,
+        2,
+        Some(0),
+        Some(2),
+        Some(1),
+        2,
+        SkillPriority(210),
+    ));
+
+    for effect in ["空净化", "护盾", "疾走", "蓄力"] {
+        let mut runtime = runtime.clone();
+        let owner = runtime.entities.get_mut(bob).unwrap();
+        match effect {
+            "护盾" => {
+                owner.runtime.shield = 10;
+                owner.states.register_compressed_legacy_state(CompressedLegacyState::Shield);
+            }
+            "疾走" => {
+                owner.states.add_entry(StateEntry::haste_with_effective_faster(
+                    PLAIN_HASTE_STATE_KEY,
+                    haste,
+                    2,
+                    2,
+                    3,
+                    SkillPriority(210),
+                ));
+            }
+            "蓄力" => {
+                // 预置蓄力；正常开启蓄力本身就会先提交，此处只验证解除的刷新行为。
+                owner.runtime.charge.active = true;
+            }
+            _ => {}
+        }
+        runtime.apply_disperse_hit_into(carol, bob, &mut RunUpdates::new());
+        let owner = runtime.entities.get(bob).unwrap();
+        assert_eq!(owner.runtime.shield, 0);
+        assert!(!owner.runtime.charge.active);
+        assert!(owner.states.entry(PLAIN_HASTE_STATE_KEY).is_none());
+        assert!(owner.states.entry(PLAIN_CHARM_STATE_KEY).is_some());
+        let ally = if matches!(effect, "疾走" | "蓄力") { carol } else { alice };
+        assert_eq!(runtime.protect_target_candidates(bob), [ally], "{effect}");
+    }
+}
+
 #[test]
 fn plain_slow_first_application_refreshes_pending_haste_multiplier() {
     let config = default_custom_runtime_import_config().expect("default runtime profile should build");

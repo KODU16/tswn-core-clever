@@ -227,7 +227,8 @@ impl CombatRuntime {
             .get(target)
             .and_then(|entity| entity.states.entry(76))
             .and_then(StateEntry::charm_value);
-        if let Some((mut group_id, effective_team_idx, mut source_team_idx, state_target, mut step)) = existing {
+        // 重魅只更新继承来源；目标的有效队伍等自己的 updateStates 再提交。
+        if let Some((mut group_id, mut effective_team_idx, mut source_team_idx, state_target, mut step)) = existing {
             let existing_team_idx = source_team_idx.or_else(|| {
                 u32::try_from(group_id)
                     .ok()
@@ -237,8 +238,17 @@ impl CombatRuntime {
             if existing_team_idx == Some(caster_effective_team_idx) {
                 step += 1;
             } else {
+                // 旧载荷没有有效队伍时，先固化旧 group_id 的读取结果，避免改来源就提前换队。
+                effective_team_idx = effective_team_idx.or_else(|| Some(self.plain_effective_team(target)));
                 group_id = actor.0 as usize;
                 source_team_idx = Some(caster_effective_team_idx);
+                #[cfg(not(feature = "no_debug"))]
+                if crate::debug::probe_charm().is_some() {
+                    eprintln!(
+                        "[charm_probe:runtime:source_change] actor={} target={} source={caster_effective_team_idx} effective={effective_team_idx:?}",
+                        actor.0, target.0,
+                    );
+                }
             }
             if charge_active {
                 step += 3;
