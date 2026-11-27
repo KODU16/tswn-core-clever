@@ -327,6 +327,33 @@ fn status_labels(entity: &EntityRecord) -> Vec<String> {
     }
     if let Some(s) = &entity.runtime.rosmontic {
         // 回放直接读取随快照保存的专属计时与阶段。
+        if s.phase > 0 {
+            push_status_label(&mut labels, format!("阶段 {}", s.phase));
+        }
+        if s.conceal > 0 {
+            push_status_label(&mut labels, format!("隐蔽 {}", s.conceal));
+        }
+        if s.blind_turns > 0 {
+            push_status_label(&mut labels, format!("目盲 {}", s.blind_turns));
+        }
+        if s.locked_turns > 0 {
+            push_status_label(&mut labels, format!("弱点把握 {}", s.locked_turns));
+        }
+        if s.anger_turns > 0 {
+            push_status_label(&mut labels, format!("愤怒 {}", s.anger_turns));
+        }
+        if s.taunt_turns > 0 {
+            push_status_label(&mut labels, format!("嘲讽 {}", s.taunt_turns));
+        }
+        if s.shieldless {
+            push_status_label(&mut labels, "弃盾");
+        }
+        if s.plate {
+            push_status_label(&mut labels, "特殊防弹板");
+        }
+        if s.gap {
+            push_status_label(&mut labels, "隙间");
+        }
         if s.cat {
             push_status_label(&mut labels, "化猫");
         }
@@ -349,7 +376,18 @@ fn status_labels(entity: &EntityRecord) -> Vec<String> {
             push_status_label(&mut labels, format!("梦想天生 {}", s.dream));
         }
         if s.barrier_turns > 0 {
-            push_status_label(&mut labels, format!("二重结界 {}", s.barrier_turns));
+            push_status_label(
+                &mut labels,
+                format!(
+                    "{} {}",
+                    if entity.template.name == "yukari" {
+                        "四重结界"
+                    } else {
+                        "二重结界"
+                    },
+                    s.barrier_turns
+                ),
+            );
         }
         if s.aura {
             push_status_label(&mut labels, "气场");

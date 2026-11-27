@@ -290,6 +290,9 @@ impl PreparedBattleRoster {
         lazy_blueprint_players: &[PlrId],
         team_upgrades: bool,
     ) -> Result<Self, RuntimeBattleInitError> {
+        // 与原始输入共用整队展开，保证模板和初始 roster 人数一致。
+        let expanded = crate::namerena::expand_boss_squads(raw_groups);
+        let raw_groups = &expanded;
         let mut groups = Vec::with_capacity(raw_groups.len());
         for (team_index, raw_group) in raw_groups.iter().enumerate() {
             let mut group = Vec::with_capacity(raw_group.len());
@@ -578,7 +581,11 @@ impl PreparedBattleRoster {
         state.speed_points.clear();
         state.speed_points.resize(self.players.len(), 0);
         for &player in &state.round_order {
-            state.speed_points[player.0 as usize] = rng.r255() as i32;
+            // 两队队长拥有开场行动提前，避免部署晚于普通队员。
+            let leader = self.players[player.0 as usize]
+                .as_ref()
+                .is_some_and(|p| matches!(p.template.id_key_name.as_str(), "fox1@!" | "ribbit1@!"));
+            state.speed_points[player.0 as usize] = rng.r255() as i32 + if leader { 20480 } else { 0 };
         }
 
         Self::refill_entity_groups(&mut state.team_roster, &state.battle_groups);

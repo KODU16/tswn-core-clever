@@ -310,6 +310,16 @@ impl PlayerRuntime {
                         | "youmu"
                         | "yuyuko"
                         | "ran"
+                        | "yukari"
+                        | "AL1S"
+                        | "fox1"
+                        | "fox2"
+                        | "fox3"
+                        | "fox4"
+                        | "ribbit1"
+                        | "ribbit2"
+                        | "ribbit3"
+                        | "ribbit4"
                 ))
             .then(|| Box::new(RosmonticRuntime::for_boss(&template.name))),
             cirno: (flags.contains(PlayerKindFlags::BOSS) && template.name == crate::runtime::combat::boss::cirno::ID)
@@ -728,8 +738,33 @@ impl EntityRecord {
                 } else {
                     f64::from_bits(s.stat_scale_bits[i])
                 };
-                *value = (f64::from(*value) * factor) as i32 + s.stat_add[i];
+                let base = if s.zero_stat_mask & (1 << i) != 0 { 0 } else { *value };
+                *value = (f64::from(base) * factor) as i32 + s.stat_add[i];
             }
+            if s.blind_turns > 0 {
+                r.agility /= i32::from(s.blind_divisor.max(1));
+                r.attack = (f64::from(r.attack) / 1.5) as i32;
+                r.magic = (f64::from(r.magic) / 1.5) as i32;
+            }
+            if s.locked_turns > 0 {
+                r.defense /= i32::from(s.locked_divisor.max(1));
+                r.resistance /= i32::from(s.locked_divisor.max(1));
+            }
+            if s.anger_turns > 0 {
+                r.defense /= 3;
+                r.resistance /= 3;
+            }
+            let mut attract = r.attract();
+            if s.attract_scale_bits != 0 {
+                attract *= f64::from_bits(s.attract_scale_bits);
+            }
+            if s.locked_turns > 0 {
+                attract *= f64::from(s.locked_divisor.max(1));
+            }
+            if s.taunt_turns > 0 {
+                attract *= 4.0;
+            }
+            r.attract_bits = attract.to_bits();
             // 神现只翻倍六围，智力与 MP 不变，解除后从模板恢复。
             if s.divine_turns > 0 {
                 r.attack *= 2;
@@ -952,6 +987,15 @@ impl EntityRecord {
         // 化猫额外提升威力，与速敏变化独立保存。
         if self.runtime.rosmontic.as_ref().is_some_and(|s| s.cat) {
             at_boost *= 2.0;
+        }
+        // 永久部署、愤怒和强化魔法的威力随属性重建恢复。
+        if let Some(s) = &self.runtime.rosmontic {
+            if s.power_bits != 0 {
+                at_boost *= f64::from_bits(s.power_bits);
+            }
+            if s.anger_turns > 0 {
+                at_boost *= 3.0;
+            }
         }
         self.runtime.at_boost_bits = at_boost.to_bits();
         self.runtime.at_boost_millionths = at_boost_to_millionths(at_boost);

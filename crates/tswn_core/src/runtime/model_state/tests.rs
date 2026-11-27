@@ -126,7 +126,9 @@ fn builtin_bosses_export_name_derived_mechanics() {
         let mut runner = RuntimeRunner::new_from_namerena_raw(format!("{name}@!\n\nleft\nright")).unwrap();
         for _ in 0..20 {
             let state = runner.model_state().unwrap();
-            let boss = &state.entities[0].template.identity;
+            // 小队输入会补齐成员，按请求身份定位投影而非假定索引为零。
+            let boss_id = runner.runtime.entities.iter().find(|(_, e)| e.template.name == name).unwrap().0;
+            let boss = &state.entities.iter().find(|e| e.id == boss_id).unwrap().template.identity;
             assert_eq!(
                 boss.boss_kind,
                 crate::namerena::BOSS_NAMES.iter().position(|candidate| *candidate == name)

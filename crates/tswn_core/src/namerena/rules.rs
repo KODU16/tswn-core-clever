@@ -4,7 +4,7 @@
 pub const SAITAMA_RETIREMENT_WINNER: &str = "SAITAMA";
 
 /// 内置 Boss 名字表；用于身份分类、默认技能与免疫规则查询。
-pub const BOSS_NAMES: [&str; 42] = [
+pub const BOSS_NAMES: [&str; 52] = [
     "mario",
     "sonic",
     "mosquito",
@@ -47,6 +47,16 @@ pub const BOSS_NAMES: [&str; 42] = [
     "youmu",
     "yuyuko",
     "ran",
+    "yukari",
+    "AL1S",
+    "fox1",
+    "fox2",
+    "fox3",
+    "fox4",
+    "ribbit1",
+    "ribbit2",
+    "ribbit3",
+    "ribbit4",
 ];
 
 /// 加成角色名字表；对应 [`boost_value`] 的加成来源。
@@ -111,6 +121,16 @@ pub fn boss_display_name(name: &str) -> &str {
         "youmu" => "魂魄妖梦",
         "yuyuko" => "西行寺幽幽子",
         "ran" => "八云蓝",
+        "yukari" => "八云紫",
+        "AL1S" => "天童爱丽丝",
+        "fox1" => "雪乃",
+        "fox2" => "妮可",
+        "fox3" => "胡桃",
+        "fox4" => "音葵",
+        "ribbit1" => "宫子",
+        "ribbit2" => "咲",
+        "ribbit3" => "萌绘",
+        "ribbit4" => "美游",
         _ => name,
     }
 }
@@ -258,6 +278,15 @@ pub fn boss_immune_threshold(name: &str, key: &str) -> i32 {
         // 琪露诺没有状态免疫名单，冰伤免疫另由防御 hook 处理。
         "cirno" | "megia" | "rumia" | "marisa" | "daiyousei" | "hong" | "koakuma" | "patchouli" | "sakuya" | "remilia"
         | "flandre" | "letty" | "chen" | "alice" | "phantom" | "youmu" | "yuyuko" | "ran" => 0,
+        // 兔狐小队与 AL1S 的精神／驱散抗性沿用参考强免疫。
+        "AL1S" | "fox1" | "fox2" | "fox3" | "fox4" | "ribbit1" | "ribbit2" | "ribbit3" | "ribbit4" => {
+            if matches!(key, "charm" | "berserk" | "disperse") {
+                240
+            } else {
+                0
+            }
+        }
+        "yukari" => 0,
         "reimu" => {
             if matches!(key, "piston" | "poison" | "slow" | "ice") {
                 192

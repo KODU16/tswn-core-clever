@@ -238,14 +238,15 @@ impl CombatRuntime {
                 target_entity.is_active(),
             )
         };
-        let immune = if target_flags.contains(PlayerKindFlags::BOOST) {
-            self.rng.r127() < crate::namerena::boost_value(&target_name)
-        } else if target_flags.contains(PlayerKindFlags::BOSS) {
-            let threshold = crate::namerena::boss_immune_threshold(&target_name, "slow");
-            (self.rng.next_u8() as i32) < threshold
-        } else {
-            false
-        };
+        let immune = self.remaining_child_immune(target, "slow")
+            || if target_flags.contains(PlayerKindFlags::BOOST) {
+                self.rng.r127() < crate::namerena::boost_value(&target_name)
+            } else if target_flags.contains(PlayerKindFlags::BOSS) {
+                let threshold = crate::namerena::boss_immune_threshold(&target_name, "slow");
+                (self.rng.next_u8() as i32) < threshold
+            } else {
+                false
+            };
         if immune || (target_active && self.roll_plain_dodge(target, owner_magic, target_resistance, false)) {
             updates.add(crate::runtime::update::RunUpdate::new(
                 "[0][回避]了攻击",
@@ -482,14 +483,15 @@ impl CombatRuntime {
                 actor.0, target.0, target_name, target_flags, self.rng.i, self.rng.j,
             );
         }
-        let immune = if target_flags.contains(PlayerKindFlags::BOOST) {
-            self.rng.r127() < crate::namerena::boost_value(&target_name)
-        } else if target_flags.contains(PlayerKindFlags::BOSS) {
-            let threshold = crate::namerena::boss_immune_threshold(&target_name, "berserk");
-            (self.rng.next_u8() as i32) < threshold
-        } else {
-            false
-        };
+        let immune = self.remaining_child_immune(target, "berserk")
+            || if target_flags.contains(PlayerKindFlags::BOOST) {
+                self.rng.r127() < crate::namerena::boost_value(&target_name)
+            } else if target_flags.contains(PlayerKindFlags::BOSS) {
+                let threshold = crate::namerena::boss_immune_threshold(&target_name, "berserk");
+                (self.rng.next_u8() as i32) < threshold
+            } else {
+                false
+            };
         let dodged = immune || (target_active && self.roll_plain_dodge(target, caster_magic, target_resistance, false));
         #[cfg(not(feature = "no_debug"))]
         if crate::debug::probe_possess().is_some() {

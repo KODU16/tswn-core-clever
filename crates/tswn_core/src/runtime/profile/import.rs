@@ -326,6 +326,9 @@ impl CustomBed2Import {
         bed2_kind: PlayerKindId,
         bed2_summon_skill: SkillId,
     ) -> Result<Vec<PlayerTemplate>, CustomMixedRosterImportError> {
+        // 与原始输入共用整队展开，保证模板和初始 roster 人数一致。
+        let expanded = crate::namerena::expand_boss_squads(raw_groups);
+        let raw_groups = &expanded;
         let mut players = Vec::new();
         let mut next_id = 1;
         for (team_index, group) in raw_groups.iter().enumerate() {
@@ -338,12 +341,17 @@ impl CustomBed2Import {
                 let template = if let Some(import) = Self::parse_player_facade_raw(raw_trimmed) {
                     import.into_player_template(next_id, bed2_kind, team_index, bed2_summon_skill)
                 } else {
-                    let input = crate::namerena::NamerenaInput::parse(raw).map_err(|error| CustomMixedRosterImportError {
+                    // 外层已展开整队，这里只构建当前成员，避免单行解析再次补队。
+                    let spec = crate::namerena::PlayerSpec::parse(raw).map_err(|error| CustomMixedRosterImportError {
                         team_index,
                         player_index,
                         raw: raw.clone(),
                         message: error.to_string(),
                     })?;
+                    let input = crate::namerena::NamerenaInput {
+                        groups: vec![vec![spec]],
+                        seed: Vec::new(),
+                    };
                     let mut prepared =
                         crate::namerena::PreparedRoster::build(&input, crate::namerena::eval_name::DEFAULT_EVAL_RQ)
                             .map_err(|error| match error {})?;

@@ -56,6 +56,7 @@ mod weapon;
 pub use build::score_profile_team_rng;
 pub use build::status_from_attrs;
 pub use build::{MinionKind, PreparedMinionBlueprint, PreparedPlayer, PreparedRinickData, PreparedRoster, PreparedRosterError};
+pub use input::expand_boss_squads;
 pub use input::{
     NAME_MAX_LEN, NamerenaInput, PlayerClass, PlayerSpec, PlayerSpecError, SEED_PREFIX, TEAM_MAX_LEN, is_seed_line,
     raw_namerena_to_id_name,

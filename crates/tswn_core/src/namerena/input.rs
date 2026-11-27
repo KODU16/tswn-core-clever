@@ -186,6 +186,9 @@ impl NamerenaInput {
 
     /// 从 raw 组与种子行构造 `NamerenaInput`：seed 行不进入玩家组，空组丢弃。
     fn from_raw_groups_with_seed(raw_groups: &[Vec<String>], seed: Vec<String>) -> Result<Self, PlayerSpecError> {
+        // 小队别名在分组内展开，四名成员保留同一战斗队伍。
+        let expanded = expand_boss_squads(raw_groups);
+        let raw_groups = &expanded;
         let mut groups = Vec::with_capacity(raw_groups.len());
         for raw_group in raw_groups {
             let mut group = Vec::with_capacity(raw_group.len());
@@ -200,6 +203,39 @@ impl NamerenaInput {
         }
         Ok(Self { groups, seed })
     }
+}
+
+/// 兔狐成员始终整队加入；重复解析已展开的队伍不会产生重复成员。
+pub fn expand_boss_squads(groups: &[Vec<String>]) -> Vec<Vec<String>> {
+    groups
+        .iter()
+        .map(|group| {
+            let mut expanded = Vec::new();
+            let mut emitted = [false; 2];
+            for raw in group {
+                let identity = raw.trim().split('+').next().unwrap_or("");
+                let squad = match identity {
+                    "fox@!" | "fox1@!" | "fox2@!" | "fox3@!" | "fox4@!" => Some(("fox", 0)),
+                    "ribbit@!" | "ribbit1@!" | "ribbit2@!" | "ribbit3@!" | "ribbit4@!" => Some(("ribbit", 1)),
+                    _ => None,
+                };
+                if let Some((squad, index)) = squad {
+                    if emitted[index] {
+                        continue;
+                    }
+                    emitted[index] = true;
+                    for i in 1..=4 {
+                        let member = format!("{squad}{i}@!");
+                        let original = group.iter().find(|line| line.trim().split('+').next() == Some(member.as_str()));
+                        expanded.push(original.cloned().unwrap_or(member));
+                    }
+                } else {
+                    expanded.push(raw.clone());
+                }
+            }
+            expanded
+        })
+        .collect()
 }
 
 /// 判断一行是否为 seed 行（[`SEED_PREFIX`] 开头）。

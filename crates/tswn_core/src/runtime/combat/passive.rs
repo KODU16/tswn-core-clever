@@ -32,6 +32,14 @@ impl CombatRuntime {
             return;
         }
         // 高体力阶段的剑技受到实际伤害后中断，低体力阶段不挂中断钩子。
+        // 蓄力在实际受伤后中断；转阶段本身不冒充受伤。
+        if self.is_rosmontic_boss(target, "yukari") || self.is_rosmontic_boss(target, "fox1") {
+            let s = self.ros_state(target);
+            if s.break_on_damage && s.charged_skill.take().is_some() {
+                s.break_on_damage = false;
+                self.rosmontic_message(target, "[0]的蓄力被打断了", updates);
+            }
+        }
         self.pcb_after_damage(target, updates);
         self.interrupt_megia_into(target, updates);
         self.upgrade_rumia_into(target, updates);

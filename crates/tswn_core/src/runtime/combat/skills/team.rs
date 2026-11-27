@@ -194,14 +194,15 @@ impl CombatRuntime {
                 target_entity.is_active(),
             )
         };
-        let immune = if target_flags.contains(PlayerKindFlags::BOOST) {
-            self.rng.r127() < crate::namerena::boost_value(&target_name)
-        } else if target_flags.contains(PlayerKindFlags::BOSS) {
-            let threshold = crate::namerena::boss_immune_threshold(&target_name, "charm");
-            (self.rng.next_u8() as i32) < threshold
-        } else {
-            false
-        };
+        let immune = self.remaining_child_immune(target, "charm")
+            || if target_flags.contains(PlayerKindFlags::BOOST) {
+                self.rng.r127() < crate::namerena::boost_value(&target_name)
+            } else if target_flags.contains(PlayerKindFlags::BOSS) {
+                let threshold = crate::namerena::boss_immune_threshold(&target_name, "charm");
+                (self.rng.next_u8() as i32) < threshold
+            } else {
+                false
+            };
         if immune || (target_active && self.roll_plain_dodge(target, owner_magic, target_dodge, false)) {
             updates.add(crate::runtime::update::RunUpdate::new(
                 "[0][回避]了攻击",
@@ -484,6 +485,17 @@ impl CombatRuntime {
             let mut had_poison = false;
             let mut had_slow = false;
             let mut should_refresh_stats = false;
+            // 普通治愈同样解除新角色施加的负面状态，部署增益继续保留。
+            if let Some(s) = target_entity.runtime.rosmontic.as_mut() {
+                should_refresh_stats = s.blind_turns > 0 || s.locked_turns > 0 || s.anger_turns > 0;
+                s.blind_turns = 0;
+                s.blind_divisor = 0;
+                s.locked_turns = 0;
+                s.locked_divisor = 0;
+                s.anger_turns = 0;
+                s.burn_turns = 0;
+                s.burn_owner = None;
+            }
             let negative_keys = target_entity
                 .states
                 .entries()

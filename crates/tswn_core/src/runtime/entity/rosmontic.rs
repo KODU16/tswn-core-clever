@@ -4,6 +4,29 @@ use super::EntityIdx;
 #[serde(default)]
 pub struct RosmonticRuntime {
     pub actions: u32,
+    /// 蓝档角色的阶段、部署指令和专属状态独立保存，支持回放快照。
+    pub phase: u8,
+    pub deployed: bool,
+    pub commands: u8,
+    pub conceal: u16,
+    pub aim: u32,
+    pub summon_count: u8,
+    pub last_stand: u8,
+    pub countering: bool,
+    pub shieldless: bool,
+    pub plate: bool,
+    pub gap: bool,
+    pub boundary: u8,
+    pub death_boundary: bool,
+    pub locked: bool,
+    pub locked_turns: u16,
+    pub locked_divisor: u16,
+    pub blind_turns: u16,
+    pub blind_divisor: u16,
+    pub anger_turns: u16,
+    pub taunt_turns: u16,
+    pub power_bits: u64,
+    pub attract_scale_bits: u64,
     /// 专属技能按参考槽号保存等级，动态降级和一次性技能随快照复制。
     pub levels: Vec<i32>,
     pub smart: bool,
@@ -32,6 +55,8 @@ pub struct RosmonticRuntime {
     pub aura_bonus: bool,
     pub qi_bits: u64,
     /// 属性变化独立保留，状态刷新时不丢失偷取、五行和妖精的复活增益。
+    /// 置零与默认倍率分开标记，避免突破指令的零防御在刷新后复原。
+    pub zero_stat_mask: u8,
     pub stat_add: [i32; 7],
     pub stat_scale_bits: [u64; 7],
     /// 燃烧存储未结算的威力；普通角色也可以仅携带这一状态而不接管行动。
@@ -68,10 +93,22 @@ impl RosmonticRuntime {
             "youmu" => &[30, 36, 51, 82, 0, 100],
             "yuyuko" => &[29, 55, 56, 81, 100, 300, 0],
             "ran" => &[50, 70, 80, 80],
+            "yukari" => &[25, 40, 63, 223, 223, 100, 0],
+            "AL1S" => &[0, 1000, 1000, 210, 100, 100, 300],
+            "fox1" => &[1000, 1000, 300, 100, 100, 80],
+            "fox2" => &[0, 55, 66, 256],
+            "fox3" => &[5, 160, 100],
+            "fox4" => &[200, 40],
+            "ribbit1" => &[1000, 60, 64, 100, 100],
+            "ribbit2" => &[25, 0, 110, 150, 0],
+            "ribbit3" => &[256, 200, 3000, 100, 0],
+            "ribbit4" => &[0, 66, 100, 100, 100],
             _ => &[],
         };
         Self {
             levels: levels.to_vec(),
+            phase: if name == "AL1S" { 1 } else { 0 },
+            summon_count: if name == "AL1S" { 1 } else { 0 },
             phantom_members: if name == "phantom" { 7 } else { 0 },
             ..Self::default()
         }

@@ -46,14 +46,15 @@ impl CombatRuntime {
                 target_entity.is_active(),
             )
         };
-        let immune = if target_flags.contains(PlayerKindFlags::BOOST) {
-            self.rng.r127() < crate::namerena::boost_value(&target_name)
-        } else if target_flags.contains(PlayerKindFlags::BOSS) {
-            let threshold = crate::namerena::boss_immune_threshold(&target_name, "half");
-            (self.rng.next_u8() as i32) < threshold
-        } else {
-            false
-        };
+        let immune = self.remaining_child_immune(target, "half")
+            || if target_flags.contains(PlayerKindFlags::BOOST) {
+                self.rng.r127() < crate::namerena::boost_value(&target_name)
+            } else if target_flags.contains(PlayerKindFlags::BOSS) {
+                let threshold = crate::namerena::boss_immune_threshold(&target_name, "half");
+                (self.rng.next_u8() as i32) < threshold
+            } else {
+                false
+            };
         let chance = (owner_wisdom + ((360 - target_hp) / 3)).max(0);
         if immune
             || (target_active
@@ -619,14 +620,15 @@ impl CombatRuntime {
                 )
             })
             .unwrap_or_else(|| panic!("unknown runtime exchange target: {}", target.0));
-        let immune = if target_flags.contains(PlayerKindFlags::BOOST) {
-            self.rng.r127() < crate::namerena::boost_value(&target_name)
-        } else if target_flags.contains(PlayerKindFlags::BOSS) {
-            let threshold = crate::namerena::boss_immune_threshold(&target_name, "exchange");
-            (self.rng.next_u8() as i32) < threshold
-        } else {
-            false
-        };
+        let immune = self.remaining_child_immune(target, "exchange")
+            || if target_flags.contains(PlayerKindFlags::BOOST) {
+                self.rng.r127() < crate::namerena::boost_value(&target_name)
+            } else if target_flags.contains(PlayerKindFlags::BOSS) {
+                let threshold = crate::namerena::boss_immune_threshold(&target_name, "exchange");
+                (self.rng.next_u8() as i32) < threshold
+            } else {
+                false
+            };
         #[cfg(not(feature = "no_debug"))]
         if crate::debug::probe_exchange().is_some() {
             let owner = self.entities.get(actor).expect("runtime exchange owner missing for probe");

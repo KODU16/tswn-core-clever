@@ -118,6 +118,7 @@ impl CombatRuntime {
         defend_value: &mut RuntimeDefendValue,
         on_damage: PlainAttackOnDamage,
     ) {
+        self.remaining_pre_defend(target, defend_value, updates);
         self.pcb_letty_shield(target, updates);
         // 大妖精支付自己的反射消耗，成功后本次入射威力归零。
         if self.is_rosmontic_boss(target, "daiyousei")
@@ -426,6 +427,9 @@ impl CombatRuntime {
             defend_value.set_damage(0);
             return;
         }
+        if self.remaining_defend(target, defend_value, updates) {
+            return;
+        }
         if self.pcb_defend(target, defend_value, updates) {
             return;
         }
@@ -693,6 +697,9 @@ impl CombatRuntime {
     /// 执行目标的死亡 hook：护身符、史莱姆分裂、马里奥复活等。
     pub fn drain_die_hooks_into(&mut self, target: EntityIdx, updates: &mut RunUpdates) {
         // 反魂蝶先恢复生命，式神死亡返还只执行一次。
+        if self.remaining_revive(target, updates) {
+            return;
+        }
         if self.revive_pcb_into(target, updates) {
             return;
         }
@@ -723,6 +730,14 @@ impl CombatRuntime {
 
     /// 执行击杀者的 KILL hook。
     pub fn drain_kill_hooks_into(&mut self, caster: EntityIdx, killed_target: EntityIdx, updates: &mut RunUpdates) {
+        // 美游击杀敌方本体后增加威力并提前行动。
+        if self.is_rosmontic_boss(caster, "ribbit4")
+            && self.plain_effective_team(caster) != self.plain_effective_team(killed_target)
+            && !self.entities.get(killed_target).unwrap().runtime.is_combat_minion()
+        {
+            self.ros_power(caster, 1.0, 0.5);
+            self.ros_advance(caster, 2048);
+        }
         let kill_skill_plan = self.scheduler.skill_hook_plan(&self.entities, &self.registry, caster, ProcMask::KILL);
         self.drain_plain_kill_skill_plan_into(&kill_skill_plan, killed_target, updates);
         let kill_state_plan = self.scheduler.state_hook_plan(&self.entities, caster, ProcMask::KILL);
@@ -1078,6 +1093,9 @@ impl CombatRuntime {
 
     /// 目标对指定状态是否免疫：Boss 与加成角色按阈值判定。
     pub fn status_immune(&mut self, target: EntityIdx, status: &'static str) -> bool {
+        if self.remaining_child_immune(target, status) {
+            return true;
+        }
         // 明确指定目标的异常状态也无法命中被子。
         if self.is_quilt(target) {
             return true;

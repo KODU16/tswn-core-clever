@@ -28,11 +28,21 @@ impl CombatRuntime {
                             | "youmu"
                             | "yuyuko"
                             | "ran"
+                            | "yukari"
+                            | "AL1S"
+                            | "fox1"
+                            | "fox2"
+                            | "fox3"
+                            | "fox4"
+                            | "ribbit1"
+                            | "ribbit2"
+                            | "ribbit3"
+                            | "ribbit4"
                     ))
         })
     }
 
-    pub(super) fn ros_state(&mut self, actor: EntityIdx) -> &mut RosmonticRuntime {
+    pub(crate) fn ros_state(&mut self, actor: EntityIdx) -> &mut RosmonticRuntime {
         self.entities
             .get_mut(actor)
             .unwrap()
@@ -92,6 +102,9 @@ impl CombatRuntime {
         let state = self.ros_state(actor);
         let old = f64::from_bits(state.stat_scale_bits[index]);
         let old = if old == 0.0 { 1.0 } else { old };
+        if factor == 0.0 {
+            state.zero_stat_mask |= 1 << index;
+        }
         state.stat_scale_bits[index] = (old * factor).to_bits();
         state.stat_add[index] = (f64::from(state.stat_add[index]) * factor) as i32 + delta;
         let r = &mut self.entities.get_mut(actor).unwrap().runtime;
@@ -129,6 +142,7 @@ impl CombatRuntime {
 
     /// 回合前只推进真正获行动的角色；时停和梦想计数不受其他人的回合影响。
     pub(crate) fn begin_rosmontic_action(&mut self, actor: EntityIdx, updates: &mut RunUpdates) {
+        self.begin_remaining_action(actor, updates);
         self.begin_pcb_action(actor, updates);
         let Some(e) = self.entities.get_mut(actor) else {
             return;
@@ -156,6 +170,7 @@ impl CombatRuntime {
 
     /// 结界四次自身行动后解除；燃烧的剩余威力分两轮衰减并走真实伤害链。
     pub(crate) fn end_rosmontic_action(&mut self, actor: EntityIdx, updates: &mut RunUpdates) {
+        self.end_remaining_action(actor);
         self.end_pcb_action(actor, updates);
         let Some(s) = self.entities.get_mut(actor).and_then(|e| e.runtime.rosmontic.as_mut()) else {
             return;
@@ -195,7 +210,13 @@ impl CombatRuntime {
         let Some(s) = self.entities.get_mut(target).and_then(|e| e.runtime.rosmontic.as_mut()) else {
             return;
         };
-        let changed = s.aura || s.barrier_turns > 0 || s.divine_turns > 0;
+        let barrier = s.barrier_turns > 0;
+        let changed = s.aura || barrier || s.divine_turns > 0 || s.taunt_turns > 0;
+        s.taunt_turns = 0;
+        if barrier && self.entities.get(target).unwrap().template.name == "yukari" {
+            self.ros_attract(target, 1.0 / 1.12);
+        }
+        let s = self.ros_state(target);
         s.divine_turns = 0;
         s.aura = false;
         s.barrier_turns = 0;
@@ -207,6 +228,9 @@ impl CombatRuntime {
     }
 
     pub(super) fn ros_immune(&mut self, target: EntityIdx, key: &str) -> bool {
+        if self.remaining_child_immune(target, key) {
+            return true;
+        }
         let e = self.entities.get(target).unwrap();
         let threshold = if e.runtime.flags.contains(PlayerKindFlags::BOSS) {
             crate::namerena::boss_immune_threshold(&e.template.name, key)
@@ -234,11 +258,19 @@ impl CombatRuntime {
         if let Some(s) = e.runtime.rosmontic.as_mut() {
             s.burn_owner = None;
             s.burn_turns = 0;
+            s.blind_turns = 0;
+            s.blind_divisor = 0;
+            s.locked_turns = 0;
+            s.locked_divisor = 0;
+            s.anger_turns = 0;
         }
         e.refresh_runtime_stats_from_template();
     }
 
     pub(super) fn drain_touhou_action_into(&mut self, actor: EntityIdx, updates: &mut RunUpdates) {
+        if self.remaining_action(actor, updates) {
+            return;
+        }
         let child_kind = self.ros_state(actor).child_kind;
         if child_kind != 0 {
             self.ros_child_action(actor, child_kind, updates);

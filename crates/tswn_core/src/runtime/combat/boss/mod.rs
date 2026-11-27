@@ -32,6 +32,13 @@ pub mod thanos;
 pub mod tiger;
 #[cfg(test)]
 pub mod tiger_tests;
+// 最后一批角色与小队共享状态、支援和防御钩子。
+mod remaining;
+mod remaining_children;
+mod remaining_hooks;
+mod remaining_skills;
+#[cfg(test)]
+mod remaining_tests;
 mod touhou;
 // 第二批东方角色共用召唤与状态钩子，招式按机制族拆分。
 mod alice_ran;
