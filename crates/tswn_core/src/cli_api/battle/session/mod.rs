@@ -136,6 +136,19 @@ impl BattleSession {
         Ok(())
     }
 
+    /// 开始前固定Clever储备倍率；不修改原版概率、伤害或被动。
+    pub fn set_clever_skill_multiplier(&mut self, value: f64) -> CliApiResult<()> {
+        if self.driver.rounds_advanced != 0 {
+            return Err(crate::cli_api::CliApiError::InvalidArgument(
+                "技能倍率只能在战斗开始前设置".into(),
+            ));
+        }
+        let parts = crate::runtime::skill_reserve::multiplier_micros(value)
+            .map_err(|e| crate::cli_api::CliApiError::InvalidArgument(e.into()))?;
+        self.driver.runner.runtime_mut().scratch.clever_skill_multiplier_micros = parts;
+        Ok(())
+    }
+
     /// 解析并初始化对局，不推进回合；空输入、零上限或非有限 eval_rq 返回错误。
     ///
     /// 未启用 `png_render` 时，请求 `include_icons=true` 返回 `UnsupportedOption`，

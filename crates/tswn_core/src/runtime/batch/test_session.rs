@@ -36,6 +36,7 @@ pub struct ScoreTestSession {
     subjects: Vec<usize>,
     search: Option<SearchConfig>,
     legacy_opponents: bool,
+    clever_skill_multiplier_micros: u32,
     completed: usize,
     wins: usize,
     truncated: usize,
@@ -82,6 +83,7 @@ impl ScoreTestSession {
             subjects,
             search,
             legacy_opponents: false,
+            clever_skill_multiplier_micros: 0,
             completed: 0,
             wins: 0,
             truncated: 0,
@@ -92,6 +94,16 @@ impl ScoreTestSession {
 
     /// 默认双方采用所选策略；仅显式勾选验证模式时把搜索限制在被测侧及队友。
     pub fn set_legacy_opponents(&mut self, enabled: bool) { self.legacy_opponents = enabled; }
+
+    /// 倍率只在评分开始前设置，并在每场复位后重新应用。
+    pub fn set_clever_skill_multiplier(&mut self, value: f64) -> CliApiResult<()> {
+        if self.completed != 0 {
+            return Err(CliApiError::InvalidArgument("评分开始后不能修改技能倍率".into()));
+        }
+        self.clever_skill_multiplier_micros =
+            crate::runtime::skill_reserve::multiplier_micros(value).map_err(|e| CliApiError::InvalidArgument(e.into()))?;
+        Ok(())
+    }
 
     /// 热循环只读累计值，避免为每个场次重建技能频率和百分比统计。
     pub const fn wins(&self) -> usize { self.wins }
@@ -128,6 +140,7 @@ impl ScoreTestSession {
             return Ok(());
         }
         self.advance_round_setup()?;
+        self.runner.runtime_mut().scratch.clever_skill_multiplier_micros = self.clever_skill_multiplier_micros;
         for _ in 0..BATCH_MAX_ROUNDS {
             if self.runner.have_winner() {
                 break;

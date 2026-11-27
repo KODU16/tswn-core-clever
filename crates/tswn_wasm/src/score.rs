@@ -23,6 +23,11 @@ impl ScoreTestSession {
         Ok(Self { inner })
     }
 
+    /// 评分开始前固定每场Clever储备倍率。
+    pub fn set_clever_skill_multiplier(&mut self, value: f64) -> WasmResult<()> {
+        self.inner.set_clever_skill_multiplier(value).map_err(cli_api_error)
+    }
+
     /// 推进一场。10000 场后不再推进，也不会重新开始下一轮。
     pub fn step(&mut self) -> WasmResult<()> { self.inner.step().map_err(cli_api_error) }
     pub fn progress(&self) -> WasmResult<JsValue> { dto_to_js(&self.inner.progress()) }

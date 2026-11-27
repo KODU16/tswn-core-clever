@@ -195,6 +195,8 @@ impl RuntimeRunner {
         let state = BattleModelState {
             schema_version: MODEL_STATE_SCHEMA_VERSION,
             round: rt.round,
+            skill_reserves: rt.scratch.skill_reserves.clone(),
+            clever_skill_multiplier_micros: rt.scratch.clever_skill_multiplier_micros,
             entity_slot_count: rt.entities.len(),
             input_teams: self.input_groups.clone(),
             world: rt.world.model_state(),
@@ -363,6 +365,11 @@ impl std::error::Error for ModelStateError {}
 pub struct BattleModelState {
     pub schema_version: u32,
     pub round: u64,
+    /// 学习策略储备账本；旧原版快照缺省为空，现有v1网络不读取此字段。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skill_reserves: Vec<crate::runtime::skill_reserve::SkillReserve>,
+    #[serde(default)]
+    pub clever_skill_multiplier_micros: u32,
     /// 包括为使魔生成而保留的空 ID 槽；与实体列表长度不同。
     pub entity_slot_count: usize,
     pub input_teams: Vec<Vec<EntityIdx>>,

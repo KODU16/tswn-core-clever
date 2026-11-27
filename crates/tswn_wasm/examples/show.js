@@ -28,10 +28,10 @@ import {
 import {
   buildShowShareUrl,
   readStaticReplayInputFromSearch,
-} from "./show-routing.js?v=20261125rates1";
-import { ensureApi, createBattleStreamSource, normalizeStateRateRounds, loadBattleIcon } from "./show-wasm.js?v=20261126boss12";
+} from "./show-routing.js?v=20261127reserve1";
+import { ensureApi, createBattleStreamSource, normalizeStateRateRounds, loadBattleIcon } from "./show-wasm.js?v=20261127reserve1";
 
-import { parseScoreTestInput, scoreCheckpointHtml } from "./show-score-test.js?v=20261125rates1";
+import { parseScoreTestInput, scoreCheckpointHtml } from "./show-score-test.js?v=20261127reserve1";
 import { winRateTableHtml } from "./show-win-rate.js?v=20261125rates1";
 
 import { BattleStreamController } from "./show-stream.js?v=20261125rates1";
@@ -104,6 +104,15 @@ function readStateRateRounds() {
 }
 stateRateRounds.addEventListener("change", readStateRateRounds);
 const strategySelect = document.querySelector("#strategySelect");
+const cleverSkillMultiplier = document.querySelector("#cleverSkillMultiplier");
+/** 每场开始时固定倍率；仅接受十进制数字，空值或越界阻止开始。 */
+function readCleverSkillMultiplier() {
+  const text = cleverSkillMultiplier.value.trim();
+  const value = /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(text) ? Number(text) : NaN;
+  if (!Number.isFinite(value) || value < 0.1 || value > 100) throw new Error("技能倍率请输入0.1～100之间的数字。");
+  return Math.round(value * 1e6) / 1e6;
+}
+cleverSkillMultiplier.value = new URLSearchParams(location.search).get("skillMultiplier") ?? "1";
 /** @type {HTMLInputElement} 评分验证需显式勾选，普通对局不读取此选项。 */
 const scoreLegacyOpponents = document.querySelector("#scoreLegacyOpponents");
 scoreLegacyOpponents.checked = false;
@@ -502,6 +511,7 @@ function setInputStatus(message, isError = false) {
 function setLoading(loading) {
   startBtn.disabled = loading;
   strategySelect.disabled = loading;
+  cleverSkillMultiplier.disabled = loading;
   stateRateToggle.disabled = loading;
   stateRateRounds.disabled = loading;
   sampleBtn.disabled = loading;
@@ -580,6 +590,7 @@ function buildShareUrl(rawInput) {
   return buildShowShareUrl(rawInput, {
     href: window.location.href,
     strategy: currentBattle?.strategy ?? strategySelect.value,
+    skillMultiplier: currentBattle?.skill_multiplier ?? readCleverSkillMultiplier(),
   });
 }
 
@@ -810,8 +821,9 @@ function startScoreTest(input, { persistInput }) {
   clearCurrentReplayView();
   const strategy = strategySelect.value;
   const legacyOpponents = strategy === "search" && scoreLegacyOpponents.checked;
+  const skillMultiplier = strategy === "search" ? readCleverSkillMultiplier() : 1;
   // 始终展示模式和策略，避免把普通与强化、单挑与评分混淆。
-  const label = (strategy === "search" ? (legacyOpponents ? "己方 Clever / 对手原版 · " : "双方 Clever · ") : "全员原版 · ") + input.label;
+  const label = (strategy === "search" ? (legacyOpponents ? "己方 Clever / 对手原版 · " : "双方 Clever · ") : "全员原版 · ") + input.label + (strategy === "search" ? ` · 技能倍率×${skillMultiplier}` : "");
   playerList.textContent = input.input;
   plistMeta.textContent = input.label + " · 固定 10000 场";
   headerMeta.textContent = label + " · 计算中，1000 / 10000 场各展示一次";
@@ -831,7 +843,7 @@ function startScoreTest(input, { persistInput }) {
     setInputStatus(message, failed);
   }
   try {
-    worker = new Worker(new URL("./show-score-worker.js", import.meta.url), { type: "module" });
+    worker = new Worker(new URL("./show-score-worker.js?v=20261127reserve1", import.meta.url), { type: "module" });
     scoreWorker = worker;
     cancel.onclick = () => finish("评分已停止；保留已完成的检查点。");
     worker.onmessage = ({ data }) => {
@@ -848,7 +860,7 @@ function startScoreTest(input, { persistInput }) {
     worker.onerror = event => {
       if (generation === battleGenerationToken && scoreWorker === worker) finish("评分失败：" + (event.message || "后台计算异常"), true);
     };
-    worker.postMessage({ input: { ...input, legacyOpponents }, strategy });
+    worker.postMessage({ input: { ...input, legacyOpponents, skillMultiplier }, strategy });
   } catch (error) {
     finish("评分启动失败：" + formatError(error), true);
   }
@@ -870,7 +882,7 @@ async function startBattle({ persistInput = true } = {}) {
     return;
   }
   let scoreInput;
-  try { scoreInput = parseScoreTestInput(rawInput); }
+  try { scoreInput = parseScoreTestInput(rawInput); if (strategySelect.value === "search") readCleverSkillMultiplier(); }
   catch (error) { setInputStatus(formatError(error), true); openInputEditor(); return; }
   const battleInput = scoreInput == null ? withChallengeBoss(rawInput) : rawInput;
   const inputError = validateReplayInput(scoreInput?.input ?? battleInput);
@@ -905,12 +917,13 @@ async function startBattle({ persistInput = true } = {}) {
   const rateRounds = readStateRateRounds();
   const strategy = strategySelect.value;
   const ratesEnabled = stateRateToggle.checked;
+  const skillMultiplier = strategy === "search" ? readCleverSkillMultiplier() : 1;
   let source = null;
   try {
-    source = await createBattleStreamSource(battleInput, versionInfo, coreVersionInfo, modulePathInfo, { metrics: battleMetrics, strategy, stateRates: ratesEnabled, stateRateRounds: rateRounds });
+    source = await createBattleStreamSource(battleInput, versionInfo, coreVersionInfo, modulePathInfo, { metrics: battleMetrics, strategy, skillMultiplier, stateRates: ratesEnabled, stateRateRounds: rateRounds });
     if (generation !== battleGenerationToken) { source.dispose(); return; }
     currentBattle = {
-      raw_input: source.raw_input, seed_line: source.seed_line, strategy, state_rates_enabled: ratesEnabled, state_rate_rounds: rateRounds,
+      raw_input: source.raw_input, seed_line: source.seed_line, strategy, skill_multiplier: skillMultiplier, state_rates_enabled: ratesEnabled, state_rate_rounds: rateRounds,
       players: source.players, initial_states: source.initial_states,
       frames: [], result: null, source_done: false,
       winner_ids: [], final_states: source.initial_states,
@@ -919,6 +932,8 @@ async function startBattle({ persistInput = true } = {}) {
     // 在首次拉取源代码前，初始 DOM 和加载状态已经就绪。
     closePanel(inputPanel);
     beginReplayPlayback(currentBattle, { autoPlay: false });
+    // 对局注明固定倍率，编辑下场配置不会改变本场规则。
+    document.querySelector("#runtimeModeInfo").textContent = strategy === "search" ? `Clever 混合v1 · 技能储备倍率×${skillMultiplier}` : "原版策略";
     battleMetrics.initialRendered();
     setLoading(false);
     setInputStatus("战斗已开始，正在逐帧播放。");

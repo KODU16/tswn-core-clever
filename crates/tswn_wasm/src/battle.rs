@@ -52,6 +52,11 @@ impl BattleSession {
             .map_err(cli_api_error)
     }
 
+    /// 开局前设置Clever储备倍率。
+    pub fn set_clever_skill_multiplier(&mut self, value: f64) -> WasmResult<()> {
+        self.inner.set_clever_skill_multiplier(value).map_err(cli_api_error)
+    }
+
     #[wasm_bindgen(constructor)]
     /// 解析空行分队的 raw 和可选 options；max_rounds 为正数回合预算。
     /// 未提供选项时使用 core 默认值；错误抛出 `{code, message}`，不是 Error 实例。

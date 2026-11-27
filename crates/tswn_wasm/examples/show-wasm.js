@@ -199,6 +199,9 @@ export async function createBattleStreamSource(rawInput, versionInfo, coreVersio
         if (options.strategy === "search") {
             if (typeof session.set_search !== "function") throw new Error("当前引擎未提供 Clever 搜索，请刷新页面加载新版。");
             session.set_search(16, 128, 4, 1);
+            // 新倍率接口仅在Clever启用；旧WASM可兼容默认1，非默认值必须明确支持。
+            if (typeof session.set_clever_skill_multiplier === "function") session.set_clever_skill_multiplier(options.skillMultiplier ?? 1);
+            else if ((options.skillMultiplier ?? 1) !== 1) throw new Error("当前引擎不支持技能倍率，请刷新页面。");
         }
         const initialStates = session.initial_states();
         const stateRateRounds = normalizeStateRateRounds(options.stateRateRounds);

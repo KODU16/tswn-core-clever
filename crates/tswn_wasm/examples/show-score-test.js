@@ -32,6 +32,10 @@ export async function runScoreTest(api, input, strategy, onCheckpoint, yieldCont
   const session = new api.ScoreTestSession(options.input, strategy === "search", options.enhanced,
     strategy === "search" && options.legacyOpponents === true);
   try {
+    if (strategy === "search") {
+      if (typeof session.set_clever_skill_multiplier === "function") session.set_clever_skill_multiplier(options.skillMultiplier ?? 1);
+      else if ((options.skillMultiplier ?? 1) !== 1) throw new Error("当前评分引擎不支持技能倍率，请刷新页面。");
+    }
     if (session.progress().total !== SCORE_TEST_TOTAL) throw new Error("评分场数不匹配，请刷新页面。");
     let yieldedAt = performance.now();
     for (let completed = 1; completed <= SCORE_TEST_TOTAL; completed++) {

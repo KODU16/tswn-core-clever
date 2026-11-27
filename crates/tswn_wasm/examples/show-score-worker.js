@@ -1,5 +1,5 @@
-import { ensureApi } from "./show-wasm.js";
-import { runScoreTest } from "./show-score-test.js";
+import { ensureApi } from "./show-wasm.js?v=20261127reserve1";
+import { runScoreTest } from "./show-score-test.js?v=20261127reserve1";
 
 self.onmessage = async ({ data }) => {
   // 每次测试独占 Worker；关闭/替换测试时由页面 terminate，包含进行中的一场。

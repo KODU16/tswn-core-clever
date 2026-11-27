@@ -56,6 +56,8 @@ pub mod scheduler;
 /// Clever 搜索与局面估值入口，供 CLI 和跨语言适配层使用。
 pub mod search;
 mod session;
+/// Clever 使用的单场技能额度与库存。
+pub mod skill_reserve;
 pub mod slot;
 #[cfg(not(feature = "no_debug"))]
 pub mod trace;

@@ -8,7 +8,7 @@
 
 网络使用 1318 维情景和 327 维候选动作特征；情景塔、动作塔经拼接及逐元素乘积输入动作评分头。SiLU 激活，LayerNorm epsilon 为 1e-5，标准化后裁剪至 [-10,10]，推理关闭 Dropout。基线 V 头不参与决策。布局及实现见 `src/runtime/clever_policy.rs`。
 
-Clever 每次行动先对每个技能按原版熟练度概率判定资格，同一技能全部目标共享一次结果；只对通过资格的合法候选选最高分，再由正式引擎结算，不叠加旧熟练度分数。模型未覆盖的专属动作／技能回退旧 Clever 搜索，Boss 保持原机制。网页仍默认原版，主动选择“Clever 学习模型（混合 v1）”启用。
+Clever 按原版技能顺序的实际份额积累独立次数储备，同一技能全部目标共享库存，可保留后连续使用；倍率默认1，可由玩家设置0.1～100。只对有库存的合法候选选最高分，再由正式引擎结算，不叠加旧熟练度分数。模型未覆盖的专属动作／技能回退旧 Clever 搜索，Boss 保持原机制。网页仍默认原版，主动选择“Clever 学习模型（混合 v1）”启用。
 
 使用 Python/PyTorch 环境复现导出：
 
@@ -16,4 +16,4 @@ Clever 每次行动先对每个技能按原版熟练度概率判定资格，同�
 python scripts/clever_training/export_policy.py --checkpoint crates/tswn_core/models/clever-mixed-v1/training-best.pt --output crates/tswn_core/models/clever-mixed-v1 --model-id clever-mixed-v1-20261127-e15
 ```
 
-三个真实决策的 Rust 特征和分数与 Python/PyTorch 对齐；浏览器 WASM 实测最大分数误差约 4.77e-7。离线 +9.33 个百分点仅表示当前一步选择、随后原版续战的收益，完整学习策略的实战强度由网页对局进一步评估。
+三个真实决策的 Rust 特征和分数与 Python/PyTorch 对齐；浏览器 WASM 实测最大分数误差约 4.77e-7。离线 +9.33 个百分点仅表示当前一步选择、随后原版续战的收益，完整学习策略的实战强度由网页对局进一步评估。现权重未读取库存数量、倍率或学习储备的机会成本，后续需要包含这些特征的新训练；不把新增规则宣称为已证明的模型提升。

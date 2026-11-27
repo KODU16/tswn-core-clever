@@ -156,6 +156,10 @@ pub enum PreparedPlainAction {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BattleScratch {
     pub selected_actor_round: u64,
+    /// 本场各实体的技能储备；整场复位时清空，回合结束保留。
+    pub skill_reserves: Vec<crate::runtime::skill_reserve::SkillReserve>,
+    /// 百万分倍率；零表示默认1倍，仅改变Clever储备份额。
+    pub clever_skill_multiplier_micros: u32,
     /// 搜索逐回合推演时的临时状态；普通对局为 None。
     pub(crate) search_turn: Option<crate::runtime::search::SearchTurn>,
 }
@@ -165,6 +169,8 @@ impl BattleScratch {
     pub fn clear(&mut self) {
         self.selected_actor_round = 0;
         self.search_turn = None;
+        self.skill_reserves.clear();
+        self.clever_skill_multiplier_micros = 0;
     }
 }
 #[derive(Debug, Clone)]

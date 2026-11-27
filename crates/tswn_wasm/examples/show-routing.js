@@ -53,7 +53,7 @@ export function encodeBase64UrlUtf8(input) {
  * @param {{ href: string }} options
  * @returns {string}
  */
-export function buildShowShareUrl(rawInput, { href, strategy }) {
+export function buildShowShareUrl(rawInput, { href, strategy, skillMultiplier }) {
   const url = new URL(href);
   for (const paramName of STATIC_INPUT_PARAM_NAMES) {
     url.searchParams.delete(paramName);
@@ -63,6 +63,7 @@ export function buildShowShareUrl(rawInput, { href, strategy }) {
   }
   url.searchParams.set("input", encodeBase64UrlUtf8(rawInput));
   if (strategy) url.searchParams.set("strategy", strategy);
+  if (skillMultiplier != null) url.searchParams.set("skillMultiplier", String(skillMultiplier));
   url.hash = "";
   return url.href;
 }

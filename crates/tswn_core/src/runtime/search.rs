@@ -105,8 +105,8 @@ mod tests {
     }
 
     #[test]
-    fn skill_proficiency_gates_once_per_action_not_per_target() {
-        // 多个合法目标共享同一次技能概率判定，预览和正式执行复用相同随机流。
+    fn initial_reserve_shares_match_skill_order_not_target_count() {
+        // 初次发放按扫描份额，多个目标共享库存；预览和正式执行账本保持一致。
         let config = default_custom_runtime_import_config().unwrap();
         let fire = config.registry.skill_id_by_export_name(BuiltinActiveSkill::Fire.export_name()).unwrap();
         let ice = config.registry.skill_id_by_export_name(BuiltinActiveSkill::Ice.export_name()).unwrap();
@@ -147,7 +147,7 @@ mod tests {
                 (fire_passes as f64 / opportunities as f64 - p).abs() < 0.035,
                 "level {level}: {fire_passes}"
             );
-            let expected_any = 1.0 - (1.0 - p) * 0.5;
+            let expected_any = 1.0 - (1.0 - p) * (1.0 - (1.0 - p) * 0.5);
             assert!((any_passes as f64 / opportunities as f64 - expected_any).abs() < 0.035);
             if level == 0 {
                 assert_eq!(fire_passes, 0);
