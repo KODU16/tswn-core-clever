@@ -326,6 +326,13 @@ fn status_labels(entity: &EntityRecord) -> Vec<String> {
         push_status_label(&mut labels, "逮捕");
     }
     if let Some(s) = &entity.runtime.rosmontic {
+        // 回放读取永久观察层数和短期增益，避免前进后退重新推算。
+        if s.rc_observations > 0 {
+            push_status_label(&mut labels, format!("观察次数 ×{}", s.rc_observations));
+        }
+        if s.rc_boost_turns > 0 {
+            push_status_label(&mut labels, format!("观察增益 {}", s.rc_boost_turns.min(2)));
+        }
         // 回放直接读取随快照保存的专属计时与阶段。
         if s.phase > 0 {
             push_status_label(&mut labels, format!("阶段 {}", s.phase));

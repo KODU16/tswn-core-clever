@@ -211,7 +211,9 @@ impl CombatRuntime {
             return;
         };
         let barrier = s.barrier_turns > 0;
-        let changed = s.aura || barrier || s.divine_turns > 0 || s.taunt_turns > 0;
+        let changed = s.aura || barrier || s.divine_turns > 0 || s.taunt_turns > 0 || s.rc_boost_turns > 0;
+        // 仅观察次数不可消去，观察带来的临时属性增益仍可正常驱散。
+        s.rc_boost_turns = 0;
         s.taunt_turns = 0;
         if barrier && self.entities.get(target).unwrap().template.name == "yukari" {
             self.ros_attract(target, 1.0 / 1.12);

@@ -556,8 +556,8 @@ impl CombatRuntime {
         pre_action: PlainSkillPreActionOutcome,
     ) -> Option<PreparedPlainAction> {
         crate::runtime::forced_action::hit();
-        // RC 和“小”在脚本、狂暴或 MP 不足时也不能降级为普通攻击。
-        if self.is_rc_actor(actor) {
+        // 专属行动不退化为普攻；本体自加的狂暴例外，沿原生强制攻击与倒计时执行。
+        if self.is_rc_actor(actor) && !(self.is_rc_boss(actor) && self.has_plain_berserk_state(actor)) {
             return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
                 selected: crate::namerena::BossActionSkill::Rc,
                 targets: PreparedTargetList::new(),

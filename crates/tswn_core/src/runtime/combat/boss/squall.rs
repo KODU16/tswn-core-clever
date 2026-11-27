@@ -47,6 +47,11 @@ impl CombatRuntime {
         if !SHOW_SKILL_DIALOGUE {
             return;
         }
+        self.boss_dialogue(actor, quote, updates);
+    }
+
+    /// 共用原生台词段渲染，RC 可显示台词而 Squall 保留临时隐藏开关。
+    pub(crate) fn boss_dialogue(&self, actor: EntityIdx, quote: &'static str, updates: &mut RunUpdates) {
         updates.add_newline();
         updates.add(
             RunUpdate::new(quote, actor.0 as usize, actor.0 as usize, 0)

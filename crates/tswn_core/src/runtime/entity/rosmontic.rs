@@ -4,6 +4,9 @@ use super::EntityIdx;
 #[serde(default)]
 pub struct RosmonticRuntime {
     pub actions: u32,
+    /// RC 观察层数永久保留，独立于可驱散状态；增益计时按本体行动结算。
+    pub rc_observations: u64,
+    pub rc_boost_turns: u8,
     /// 蓝档角色的阶段、部署指令和专属状态独立保存，支持回放快照。
     pub phase: u8,
     pub deployed: bool,

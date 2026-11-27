@@ -934,6 +934,8 @@ impl CombatRuntime {
         let actual_damage = amount.max(0).min(target_entity.runtime.hp.max(0));
         target_entity.runtime.hp = (target_entity.runtime.hp - amount).max(0);
         let was_alive = target_entity.runtime.alive;
+        // 保存当下存活判定，避免后续被动复活把致死一击误判为可反雷。
+        let survived_hit = target_entity.runtime.hp > 0;
         self.record_squall_damage(caster, target, actual_damage);
         if actual_damage > 0 {
             // 曙光的「局」层数：被本体命中一次加一层。
@@ -979,6 +981,10 @@ impl CombatRuntime {
             }
         }
         self.drain_plain_post_damage_skill_chain_into(target, amount, caster, updates);
+        // 反雷放在实际扣血之后，零伤害、护盾吸收与致死一击都不触发。
+        if actual_damage > 0 && survived_hit {
+            self.rc_thunder_on_attack(target, caster, updates);
+        }
         was_alive
             && self
                 .entities

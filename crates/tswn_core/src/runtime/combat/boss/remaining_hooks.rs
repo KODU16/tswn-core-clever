@@ -181,6 +181,11 @@ impl CombatRuntime {
             return;
         };
         let mut refresh = false;
+        // 观察增益在施法后保留两个后续自身回合，结束时从模板恢复。
+        if s.rc_boost_turns > 0 {
+            s.rc_boost_turns -= 1;
+            refresh |= s.rc_boost_turns == 0;
+        }
         for turns in [&mut s.blind_turns, &mut s.locked_turns, &mut s.anger_turns, &mut s.taunt_turns] {
             if *turns > 0 {
                 *turns -= 1;

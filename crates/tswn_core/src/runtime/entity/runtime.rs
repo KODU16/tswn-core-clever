@@ -746,6 +746,11 @@ impl EntityRecord {
                 };
                 let base = if s.zero_stat_mask & (1 << i) != 0 { 0 } else { *value };
                 *value = (f64::from(base) * factor) as i32 + s.stat_add[i];
+                // RC 的两回合增益按外显属性乘 1.2，速度先移除行动条偏移。
+                if s.rc_boost_turns > 0 {
+                    let offset = if i == 2 { -124 } else { 36 };
+                    *value = (f64::from(*value + offset) * 1.2) as i32 - offset;
+                }
             }
 
             if s.locked_turns > 0 {
