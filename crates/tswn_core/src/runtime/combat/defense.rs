@@ -704,6 +704,10 @@ impl CombatRuntime {
 
     /// 执行目标的死亡 hook：护身符、史莱姆分裂、马里奥复活等。
     pub fn drain_die_hooks_into(&mut self, target: EntityIdx, updates: &mut RunUpdates) {
+        // 只有餐厅自己的爆鸣能终止免疫，其他直接归零生命的技能也不能击倒它。
+        if self.restaurant_restore(target) {
+            return;
+        }
         // 确定次数护符先于随机死亡钩子消耗。
         if self.rv_reraise(target, updates) {
             return;
@@ -1131,6 +1135,9 @@ impl CombatRuntime {
 
     /// 目标对指定状态是否免疫：Boss 与加成角色按阈值判定。
     pub fn status_immune(&mut self, target: EntityIdx, status: &'static str) -> bool {
+        if self.is_restaurant(target) {
+            return true;
+        }
         // 专属回避确定免疫净化和背刺。
         if matches!(status, "assassinate" | "disperse") && self.rv_immune(target) {
             return true;
@@ -1189,6 +1196,10 @@ impl CombatRuntime {
 
     /// 标记目标死亡并清理链接使魔；有延迟自杀使魔时先移主后清使魔。
     pub fn mark_dead_with_linked_minions_into(&mut self, owner: EntityIdx, team: usize, updates: &mut RunUpdates) {
+        // 专属处决也不能移除餐厅；爆鸣设置 stopped 后才允许退场。
+        if self.restaurant_restore(owner) {
+            return;
+        }
         let has_deferred_self_death_minion = self.entities.iter().any(|(idx, entity)| {
             idx != owner
                 && entity.runtime.owner == owner

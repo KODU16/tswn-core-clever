@@ -501,6 +501,10 @@ impl CombatRuntime {
                     ));
                 }
                 QueuedEffect::Remove { caster, target } => {
+                    // 普通移除不绕过餐厅免疫，自身爆鸣使用独立致死链。
+                    if self.is_restaurant(target) {
+                        continue;
+                    }
                     self.ensure_effect_entity("remove", "caster", caster);
                     self.ensure_effect_entity("remove", "target", target);
                     let Some(target_entity) = self.entities.get_mut(target) else {

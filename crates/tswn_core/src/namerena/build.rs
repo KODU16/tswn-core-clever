@@ -651,6 +651,19 @@ impl PlayerBuild {
             status = status_from_attrs(attrs, 0.0, true);
             status.speed = 100;
         }
+        // 餐厅按外显七围减去 36，实际速度 106 单独保留，显示层固定显示 14。
+        if self.class == PlayerClass::Boss && self.name == "会员制餐厅" {
+            self.name_factor = 0.0;
+            attrs = [11, 45, 14, 19, 19, 8, 10, 114];
+            status = status_from_attrs(attrs, 0.0, true);
+            status.speed = 106;
+            status.attack -= 36;
+            status.defense -= 36;
+            status.agility -= 36;
+            status.magic -= 36;
+            status.resistance -= 36;
+            status.wisdom -= 36;
+        }
         // RC 保留极低但非零的选敌权重，召唤物不在场时仍可被正常攻击。
         if self.class == PlayerClass::Boss && self.name == "rc" {
             status.attract = 0.000001;

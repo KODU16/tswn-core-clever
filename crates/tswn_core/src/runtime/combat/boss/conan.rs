@@ -2,13 +2,23 @@
 use super::super::*;
 use crate::runtime::lang::keys;
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(conan)]
 impl CombatRuntime {
     /// 使用柯南的智能模式尝试抽取一组目标。
     pub fn select_plain_conan_targets(&mut self, actor: EntityIdx) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         self.select_plain_conan_targets_in_mode(actor, true)
     }
 
     pub fn select_plain_conan_action_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         let mut targets = self.select_plain_conan_targets_in_mode(actor, smart);
         if targets.is_empty() {
             let team = self.plain_effective_team(actor);
@@ -30,6 +40,10 @@ impl CombatRuntime {
     /// 普通模式抽样 3 个目标并掷评分，智能模式抽样 4 个目标。
     /// 抽到战斗使魔只计入无效次数，分身仍是合法目标。
     fn select_plain_conan_targets_in_mode(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         let select_count = if smart { 4 } else { 3 };
         let actor_team = self.plain_effective_team(actor);
         let target_pool = Self::quilt_target_pool(&self.entities, &self.world);

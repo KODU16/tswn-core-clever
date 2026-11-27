@@ -6,6 +6,8 @@ use super::super::*;
 use crate::runtime::lang::keys;
 use crate::runtime::update::RunUpdateHp;
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(mario)]
 impl CombatRuntime {
     /// 读取马里奥 Boss 状态中记录的火系技能等级；没有该状态时返回 0。
     pub fn plain_mario_fire_level(&self, actor: EntityIdx) -> u32 {

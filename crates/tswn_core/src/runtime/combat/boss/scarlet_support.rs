@@ -1,6 +1,8 @@
 //! 大妖精的支援与牺牲、红美铃的气和连拳、小恶魔的逆召唤。
 use super::super::*;
 use crate::runtime::entity::RosmonticRuntime;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(scarlet_support)]
 impl CombatRuntime {
     /// 使用同名幻影蓝图派生属性，但移除普通幻术／血祭的技能与分摊策略。
     pub(super) fn ros_spawn(&mut self, actor: EntityIdx, role: u8, updates: &mut RunUpdates) -> EntityIdx {

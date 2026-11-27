@@ -205,6 +205,17 @@
     white-space: nowrap;
 }
 
+/* 菜品完整名称在固定栏宽内自然换行，不裁切或省略。 */
+.player-name-wrap .name.dish-name {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    text-overflow: clip;
+}
+
 .name.namedie {
     background: var(--dead-bg);
     color: var(--dead-text);

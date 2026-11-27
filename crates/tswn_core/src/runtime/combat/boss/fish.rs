@@ -4,8 +4,14 @@ use super::super::*;
 /// Boss 名字。
 pub const ID: &str = "Shabby_fish";
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(fish)]
 impl CombatRuntime {
     pub fn fish_enemies(&self, actor: EntityIdx) -> Vec<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let team = self.plain_effective_team(actor);
         self.world
             .flat_alive()
@@ -122,6 +128,10 @@ impl CombatRuntime {
             return;
         };
         self.fish_say(actor, "[0]使用[所以说我现在要发11.7T帮测]", updates);
+        if self.is_restaurant(target) {
+            self.fish_say(actor, "[1]免疫了攻击", updates);
+            return;
+        }
         let accuracy = self.entities.get(actor).map_or(0, |e| e.runtime.attack);
         let dodge = self.entities.get(target).map_or(0, |e| e.runtime.agility);
         if target != actor && self.roll_plain_dodge(target, accuracy, dodge, false) {
@@ -175,6 +185,10 @@ impl CombatRuntime {
     /// 按名字重建一个战斗单位：属性与图标按新名字计算，技能表保持原样，
     /// 避免重建出缺少召唤分摊 lane 的技能表导致召唤链崩溃。
     pub fn rebuild_player_from_name(&mut self, target: EntityIdx, name: &str) -> bool {
+        // 餐厅的身份与属性同样不接受更换名字的效果。
+        if self.is_restaurant(target) {
+            return false;
+        }
         let Some(old) = self.entities.get(target) else {
             return false;
         };

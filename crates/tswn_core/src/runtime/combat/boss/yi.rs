@@ -7,8 +7,14 @@ pub const ID: &str = "咦";
 /// 衍生物名字。
 pub const BAIXIE: &str = "拜谢";
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(yi)]
 impl CombatRuntime {
     pub fn yi_enemies(&self, actor: EntityIdx) -> Vec<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let team = self.plain_effective_team(actor);
         self.world
             .flat_alive()
@@ -113,8 +119,10 @@ impl CombatRuntime {
         let atp = self.entities.get(actor).map_or(0.0, |entity| entity.runtime.get_at(true, &mut self.rng)) * 1.5;
         self.drain_plain_attack_with_atp_into(actor, target, true, atp, updates);
         if let Some(entity) = self.entities.get_mut(actor) {
-            entity.runtime.attack = entity.runtime.attack * 3 / 2;
-            entity.template.attack = entity.template.attack * 3 / 2;
+            // 长战斗或菜品重复施法可能持续叠加，放大后限制在属性可表示范围内。
+            let increase = |attack: i32| (i64::from(attack) * 3 / 2).clamp(i64::from(i32::MIN), i64::from(i32::MAX - 64)) as i32;
+            entity.runtime.attack = increase(entity.runtime.attack);
+            entity.template.attack = increase(entity.template.attack);
         }
         updates.add(RunUpdate::new("[0]攻击力永久上升50%", actor.0 as usize, actor.0 as usize, 0));
     }

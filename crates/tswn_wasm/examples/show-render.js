@@ -30,6 +30,7 @@
  *
  */
 
+import { cookingTextHtml } from "./show-cooking.js?v=20261127restaurant1";
 import {
   escapeHtml,
   actorHpMetrics,
@@ -438,7 +439,9 @@ export function renderPlayers(
                     ? " is-target"
                     : ""
               : "";
-            const nameClass = state.alive ? "name" : "name namedie";
+            // 菜名可能包含三个完整技能名，存活和死亡回放都保持完整换行。
+            const dishName = state.icon_key === "restaurant-dish" || state.id_key_name === "restaurant-dish";
+            const nameClass = `${state.alive ? "name" : "name namedie"}${dishName ? " dish-name" : ""}`;
             const stateClass = !state.alive
               ? "status-pill dead"
               : state.frozen
@@ -573,7 +576,9 @@ export function renderPlayers(
               ? " is-target"
               : ""
         : "";
-      const nameClass = state.alive ? "name" : "name namedie";
+      // 菜名可能包含三个完整技能名，存活和死亡回放都保持完整换行。
+      const dishName = state.icon_key === "restaurant-dish" || state.id_key_name === "restaurant-dish";
+      const nameClass = `${state.alive ? "name" : "name namedie"}${dishName ? " dish-name" : ""}`;
       const stateClass = !state.alive
         ? "status-pill dead"
         : state.frozen
@@ -744,6 +749,7 @@ function structuredPlayerToken(part, clip, stateMap, previousStateMap, playersBy
   });
 }
 
+// 烹饪词只在餐厅菜品文字中添加释义，不解析或信任日志 HTML。
 function renderStructuredPart(part, clip, stateMap, previousStateMap, playersById) {
   if (part.kind === "player") {
     return structuredPlayerToken(part, clip, stateMap, previousStateMap, playersById);
@@ -752,9 +758,13 @@ function renderStructuredPart(part, clip, stateMap, previousStateMap, playersByI
     return `<span class="message-number">${escapeHtml(part.text ?? "")}</span>`;
   }
   if (part.kind === "highlight") {
-    return `<span class="skill-token"${replayHighlightColorStyle(clip.color)}>${escapeHtml(part.text ?? "")}</span>`;
+    const text = part.text ?? "";
+    const cooking = clip.parts?.some(p => p.kind === "player" && (stateMap.get(p.player_id)?.id_name === "会员制餐厅" || playersById.get(p.player_id)?.id_name === "会员制餐厅"));
+    return `<span class="skill-token"${replayHighlightColorStyle(clip.color)}>${cooking ? cookingTextHtml(text, escapeHtml) : escapeHtml(text)}</span>`;
   }
-  return escapeHtml(part.text ?? "");
+  const text = part.text ?? "";
+  return clip.parts?.some(p => p.kind === "player" && (stateMap.get(p.player_id)?.id_name === "会员制餐厅" || playersById.get(p.player_id)?.id_name === "会员制餐厅"))
+    ? cookingTextHtml(text, escapeHtml) : escapeHtml(text);
 }
 
 function structuredClipHtml(clip, playersById) {
@@ -863,7 +873,9 @@ export function buildFrameRows(frame, roundIndex, previousStates = frame.states,
 }
 
 /** 内部属性转为外显口径；速度先移除行动条基值，所有七围补回 36。 */
-export function displayBattleAttribute(value, key) {
+export function displayBattleAttribute(value, key, state = null) {
+  // 餐厅实际速度 106 与指定外显速度 14 分开。
+  if (key === "speed" && state?.id_name === "会员制餐厅" && state?.player_type === "Boss") return 14;
   if (!Number.isFinite(value)) return "-";
   return value + 36 - (key === "speed" ? 160 : 0);
 }
@@ -889,7 +901,7 @@ export function statsPanelHtml(states) {
       <span class="battle-stat-icon">${icon}</span>
       <span class="battle-stat-name">${escapeHtml(s.display_name ?? s.id_name ?? String(s.id))}</span>
       <span class="battle-stat-hp">HP ${hp}/${maxHp}</span>
-      <span>攻 ${displayBattleAttribute(s.attack, "attack")}</span><span>防 ${displayBattleAttribute(s.defense, "defense")}</span><span>速 ${displayBattleAttribute(s.speed, "speed")}</span><span>敏 ${displayBattleAttribute(s.agility, "agility")}</span><span>魔 ${displayBattleAttribute(s.magic, "magic")}</span><span>抗 ${displayBattleAttribute(s.resistance, "resistance")}</span><span>智 ${displayBattleAttribute(s.wisdom, "wisdom")}</span>
+      <span>攻 ${displayBattleAttribute(s.attack, "attack", s)}</span><span>防 ${displayBattleAttribute(s.defense, "defense", s)}</span><span>速 ${displayBattleAttribute(s.speed, "speed", s)}</span><span>敏 ${displayBattleAttribute(s.agility, "agility", s)}</span><span>魔 ${displayBattleAttribute(s.magic, "magic", s)}</span><span>抗 ${displayBattleAttribute(s.resistance, "resistance", s)}</span><span>智 ${displayBattleAttribute(s.wisdom, "wisdom", s)}</span>
     </div>`;
       })
       .join("");

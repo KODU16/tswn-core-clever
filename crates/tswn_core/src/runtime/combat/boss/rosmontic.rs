@@ -1,6 +1,8 @@
 //! 冴月麟的八段台词与 megia 的两阶段剑技。
 use super::super::*;
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(rosmontic)]
 impl CombatRuntime {
     pub(crate) fn is_rosmontic_boss(&self, actor: EntityIdx, name: &str) -> bool {
         self.entities
@@ -14,6 +16,10 @@ impl CombatRuntime {
 
     /// 冴月麟不攻击；第八次行动按自我退场流程结算。
     pub fn drain_rosmontic_action_into(&mut self, actor: EntityIdx, updates: &mut RunUpdates) {
+        if self.is_restaurant_actor(actor) {
+            self.drain_restaurant_action_into(actor, updates);
+            return;
+        }
         if self.is_return_void_actor(actor) {
             self.drain_return_void_action_into(actor, updates);
             return;

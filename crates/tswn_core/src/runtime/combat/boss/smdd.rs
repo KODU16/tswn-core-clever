@@ -22,8 +22,14 @@ pub enum SmddSkill {
     God,
 }
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(smdd)]
 impl CombatRuntime {
     fn smdd_enemies(&self, actor: EntityIdx) -> Vec<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let team = self.plain_effective_team(actor);
         self.world
             .flat_alive()

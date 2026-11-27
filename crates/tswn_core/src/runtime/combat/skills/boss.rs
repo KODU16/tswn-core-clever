@@ -10,6 +10,8 @@ enum BossMergeSlot {
     Unleveled,
 }
 
+// 通过同一调用凭据捕获原版与武器技能，不复制效果公式。
+#[tswn_skill_capture::capture_skills(standard_boss)]
 impl CombatRuntime {
     /// 吞噬按原版 Boss 技能数组的位置取等级，包含不参与主动扫描的 0 级槽。
     pub fn plain_boss_merge_levels(&self, target: EntityIdx) -> Option<smallvec::SmallVec<[u32; 3]>> {

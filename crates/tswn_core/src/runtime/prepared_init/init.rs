@@ -251,6 +251,8 @@ impl PreparedBattleInit {
         runtime
             .squall_bosses
             .extend(runtime.entities.iter().filter_map(|(idx, e)| e.runtime.squall.is_some().then_some(idx)));
+        // 餐厅依赖最终 Boss 身份，不能从导入占位模板判断。
+        runtime.restaurant_init();
         runtime.rng.clone_from(&self.rng);
         runtime.scheduler.reset_action_mode_from_entities(&runtime.entities);
         let seed = PreparedBattleSeed {

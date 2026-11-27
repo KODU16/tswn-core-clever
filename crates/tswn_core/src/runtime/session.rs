@@ -184,6 +184,10 @@ impl RuntimeRunner {
     pub fn player_snapshot(&self, id: PlrId) -> Option<RuntimePlayerSnapshot> {
         let entity_idx = EntityIdx(id.try_into().ok()?);
         let entity = self.runtime.entities.get(entity_idx)?;
+        // 虚拟厨师仅参与内部结算，不进入角色栏、回放或属性查询。
+        if entity.template.id_key_name == "restaurant-chef" {
+            return None;
+        }
         Some(self.snapshot_entity(entity_idx, entity))
     }
 
@@ -192,6 +196,7 @@ impl RuntimeRunner {
         self.runtime
             .entities
             .iter()
+            .filter(|(_, entity)| entity.template.id_key_name != "restaurant-chef")
             .map(|(entity_idx, entity)| self.snapshot_entity(entity_idx, entity))
             .collect()
     }

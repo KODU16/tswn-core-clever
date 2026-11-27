@@ -19,12 +19,14 @@ pub const OCCUPY_MONKEYS: usize = 4;
 /// 场上猴区上限。
 pub const MONKEY_CAP: usize = 10;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Child {
     Monkey,
     Fish,
 }
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(quilt)]
 impl CombatRuntime {
     /// 本体是否为被子。
     pub fn is_quilt(&self, idx: EntityIdx) -> bool {
@@ -53,7 +55,8 @@ impl CombatRuntime {
 
     /// 对衍生物统一计算钻被免伤与飞翔减伤。
     pub fn quilt_damage(&self, target: EntityIdx, amount: i32) -> i32 {
-        if self.is_quilt(target) || self.quilt_minion_sleeping(target) {
+        // 餐厅只免疫伤害，不加入被子的不可选中目标池。
+        if self.is_restaurant(target) || self.is_quilt(target) || self.quilt_minion_sleeping(target) {
             return 0;
         }
         if let Some(owner) = self.quilt_owner_of(target)
@@ -274,6 +277,10 @@ impl CombatRuntime {
 
     /// 被子的敌方本体。
     fn quilt_enemies(&self, actor: EntityIdx) -> Vec<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let team = self.plain_effective_team(actor);
         self.world
             .flat_alive()

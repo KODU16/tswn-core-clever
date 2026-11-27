@@ -1,4 +1,4 @@
-import { ensureApi } from "./show-wasm.js?v=20261127reserve1";
+import { ensureApi } from "./show-wasm.js?v=20261127restaurant3";
 import { runScoreTest } from "./show-score-test.js?v=20261127reserve1";
 
 self.onmessage = async ({ data }) => {

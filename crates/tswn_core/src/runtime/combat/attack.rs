@@ -338,7 +338,14 @@ impl CombatRuntime {
             self.set_lazy_boss_at_boost(actor, at_boost + 0.5);
             return;
         }
-        updates.add_with(|| RuntimeFrame::replay_update(actor.0 as usize, target.0 as usize, "[0]发起攻击", 0));
+        // 只在真正的普攻入口标记食材，技能内的攻击结果不靠文案误判。
+        updates.add_with(|| {
+            let mut event = RuntimeFrame::replay_update(actor.0 as usize, target.0 as usize, "[0]发起攻击", 0);
+            if !self.restaurant_bosses.is_empty() {
+                event.skill_name = Some("普攻".to_owned());
+            }
+            event
+        });
         #[cfg(not(feature = "no_debug"))]
         if debug_attack {
             eprintln!(

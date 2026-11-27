@@ -105,8 +105,13 @@ pub struct RunUpdateHp {
 /// - 延迟时间（用于 web 端动画）
 #[derive(Debug, Clone)]
 pub struct RunUpdate {
+    /// 喂菜效果在机制结算后仅投影食客结果，不显示原施法动作。
+    pub restaurant_recipient: Option<PlrId>,
     /// 纯台词事件；发动、伤害和状态效果均为 false。
     pub dialogue: bool,
+    /// 通用调用元数据与可选技能名称，供餐厅抓取，显示层无需解释。
+    pub skill_call: Option<Box<super::skill_call::SkillCall>>,
+    pub skill_name: Option<String>,
     /// 视觉分值（用于 UI 展示，影响动画强度）。
     pub score: u32,
     /// 可选数值参数，对应消息中 `[2]` 的纯数字情形（优先于 targets 列表）。
@@ -149,7 +154,10 @@ impl RunUpdate {
     /// 创建一个空白占位帧（`UpdateType::None`）。
     pub fn new_dummy() -> RunUpdate {
         RunUpdate {
+            restaurant_recipient: None,
             dialogue: false,
+            skill_call: None,
+            skill_name: None,
             score: 0,
             param: None,
             delay0: 0,
@@ -173,7 +181,10 @@ impl RunUpdate {
     /// 用于在战斗日志中插入视觉换行，对应 JS 的 `RunUpdate_init(null, ...)` 形式。
     pub fn new_newline() -> RunUpdate {
         RunUpdate {
+            restaurant_recipient: None,
             dialogue: false,
+            skill_call: None,
+            skill_name: None,
             score: 0,
             param: None,
             delay0: 0,
@@ -201,7 +212,10 @@ impl RunUpdate {
     /// - `score`：UI 显示分值。
     pub fn new(msg: impl Into<Cow<'static, str>>, caster: PlrId, target: PlrId, score: u32) -> Self {
         RunUpdate {
+            restaurant_recipient: None,
             dialogue: false,
+            skill_call: None,
+            skill_name: None,
             score,
             param: None,
             delay0: DEFAULT_DELAY0_MS,
@@ -218,6 +232,12 @@ impl RunUpdate {
             hp_changes: None,
             has_damage_param: false,
         }
+    }
+
+    /// 给没有标准发动文本的技能显式标明名称；执行入口仍由捕获宏自动附加。
+    pub fn with_skill_name(mut self, name: impl Into<String>) -> Self {
+        self.skill_name = Some(name.into());
+        self
     }
 
     /// 从语言包键创建一条事件消息帧。

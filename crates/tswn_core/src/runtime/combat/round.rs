@@ -92,7 +92,8 @@ impl CombatRuntime {
             self.round += 1;
             return Some(build(None, None, None));
         }
-        let mut updates = if CAPTURE_UPDATES {
+        // 餐厅续局也记录真实技能日志，保证有帧与无帧路径决策相同。
+        let mut updates = if CAPTURE_UPDATES || !self.restaurant_bosses.is_empty() {
             RunUpdates::new()
         } else {
             RunUpdates::new_no_capture()
@@ -516,7 +517,11 @@ impl CombatRuntime {
     ) -> O {
         // 普通回放与不捕获消息的评分路径共享同一份科研状态结算。
         self.finish_squall_action(action.as_ref().map(|a| a.actor), &mut updates);
-        debug_assert_eq!(updates.capture_updates, CAPTURE_UPDATES);
+        self.restaurant_finish_round(&updates);
+        self.restaurant_present_food_results(&mut updates);
+        // 连锁反应产生的延迟消息也不能泄漏内部厨师身份。
+        self.restaurant_hide_chef(&mut updates);
+        debug_assert_eq!(updates.capture_updates, CAPTURE_UPDATES || !self.restaurant_bosses.is_empty());
         let frame = (CAPTURE_UPDATES && updates.had_updates()).then_some(RuntimeFrame { updates });
         self.round += 1;
         let winner_team = if CAPTURE_UPDATES {
@@ -559,7 +564,7 @@ impl CombatRuntime {
     ) -> Option<PreparedPlainAction> {
         crate::runtime::forced_action::hit();
         // 涵虚及菜不进入普通熟练度抽签，菜也不执行普攻。
-        if self.is_return_void_actor(actor) {
+        if self.is_restaurant_actor(actor) || self.is_return_void_actor(actor) {
             return Some(PreparedPlainAction::BossSkill(PreparedBossSkillAction {
                 selected: crate::namerena::BossActionSkill::Rosmontic,
                 targets: PreparedTargetList::new(),

@@ -11,6 +11,10 @@ use super::super::*;
 pub const ID: &str = "新纪元";
 /// 猎豹显示名。
 pub const LEOPARD: &str = "猎豹";
+/// 指数增益使用宽中间值，并为攻击公式的基础偏移保留空间。
+fn xjy_scale_stat(value: i32, numerator: i64, denominator: i64) -> i32 {
+    (i64::from(value) * numerator / denominator).clamp(i64::from(i32::MIN), i64::from(i32::MAX - 64)) as i32
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum XjySkill {
@@ -34,6 +38,8 @@ enum XjySkill {
     Cut,
 }
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(xjy)]
 impl CombatRuntime {
     pub fn xjy_units(&self, actor: EntityIdx) -> Vec<EntityIdx> {
         let team = self.plain_effective_team(actor);
@@ -46,6 +52,10 @@ impl CombatRuntime {
     }
 
     pub fn xjy_enemies(&self, actor: EntityIdx) -> Vec<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let team = self.plain_effective_team(actor);
         self.world
             .flat_alive()
@@ -269,8 +279,8 @@ impl CombatRuntime {
                 (&mut entity.runtime.resistance, &mut entity.template.resistance),
                 (&mut entity.runtime.wisdom, &mut entity.template.wisdom),
             ] {
-                *runtime = *runtime * 6 / 5;
-                *template = *template * 6 / 5;
+                *runtime = xjy_scale_stat(*runtime, 6, 5);
+                *template = xjy_scale_stat(*template, 6, 5);
             }
         }
         updates.add(RunUpdate::new("[0]全属性上升20%", actor.0 as usize, actor.0 as usize, 0));
@@ -351,8 +361,8 @@ impl CombatRuntime {
                 (&mut entity.runtime.resistance, &mut entity.template.resistance),
                 (&mut entity.runtime.wisdom, &mut entity.template.wisdom),
             ] {
-                *runtime *= 2;
-                *template *= 2;
+                *runtime = xjy_scale_stat(*runtime, 2, 1);
+                *template = xjy_scale_stat(*template, 2, 1);
             }
         }
         self.xjy_say(actor, "[0]使用[我似乎确实有些猎豹了]", updates);
@@ -371,10 +381,10 @@ impl CombatRuntime {
         self.xjy_say(actor, name, updates);
         if let Some(entity) = self.entities.get_mut(actor) {
             entity.runtime.shield += 100;
-            entity.runtime.attack *= 2;
-            entity.template.attack *= 2;
-            entity.runtime.magic *= 2;
-            entity.template.magic *= 2;
+            entity.runtime.attack = xjy_scale_stat(entity.runtime.attack, 2, 1);
+            entity.template.attack = xjy_scale_stat(entity.template.attack, 2, 1);
+            entity.runtime.magic = xjy_scale_stat(entity.runtime.magic, 2, 1);
+            entity.template.magic = xjy_scale_stat(entity.template.magic, 2, 1);
             let turn = entity.runtime.xjy.as_ref().map_or(0, |state| state.turn);
             if let Some(state) = entity.runtime.xjy.as_mut() {
                 state.iron_until = turn + 2;

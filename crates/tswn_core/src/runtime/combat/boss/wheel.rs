@@ -102,12 +102,18 @@ use super::super::*;
 use crate::runtime::lang::keys;
 use crate::runtime::update::RunUpdateHp;
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(wheel)]
 impl CombatRuntime {
     /// 生命之轮的交换目标：敌方存活者里 hp 比自己高 ≥ `TARGET_HP_GAP` 的最高血量者。
     ///
     /// 与 JS `_0x46c448.select` 一致：只用 `world.flat_alive()` 与
     /// `plain_effective_team` 判敌我，取 hp 最高者；并列时取先出现者。
     pub fn select_plain_wheel_exchange_target(&mut self, actor: EntityIdx) -> Option<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return Some(target);
+        }
         let actor_hp = self
             .entities
             .get(actor)

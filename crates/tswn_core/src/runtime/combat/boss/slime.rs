@@ -37,6 +37,8 @@ pub fn slime_child_attrs(name_base: &[u8; 128], generation: u32) -> [u32; 8] {
     attrs
 }
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(slime)]
 impl CombatRuntime {
     /// 0.5.5 `SklSlimeSpawn.b1`：史莱姆死亡时分裂成两只子体并保留尸体。
     ///

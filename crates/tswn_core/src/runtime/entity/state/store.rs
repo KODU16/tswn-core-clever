@@ -97,6 +97,8 @@ fn scheduler_state_flags(payload: &StatePayload) -> u8 {
 /// 实体的状态存储：条目、hook 掩码、注册序与查询缓存。
 #[derive(Debug, Default, Clone)]
 pub struct StateStore {
+    /// 餐厅拒绝任何状态载荷，仍能作为正常选敌目标。
+    pub immune_to_effects: bool,
     entries: SmallVec<[StateEntry; 8]>,
     hook_mask: ProcMask,
     generation: u32,
@@ -116,7 +118,8 @@ pub struct StateStore {
 impl PartialEq for StateStore {
     /// 状态存储相等：比较条目、hook 掩码、代数、注册序与压缩位标记等全部持久字段。
     fn eq(&self, other: &Self) -> bool {
-        self.entries == other.entries
+        self.immune_to_effects == other.immune_to_effects
+            && self.entries == other.entries
             && self.hook_mask == other.hook_mask
             && self.generation == other.generation
             && self.runtime_registration_orders == other.runtime_registration_orders
@@ -137,6 +140,7 @@ impl StateStore {
 
     /// 恢复场前状态并复用现有 SmallVec 容量，避免通用 Clone 反复切换内联/堆存储。
     pub fn reset_battle_state_from(&mut self, prepared: &Self) {
+        self.immune_to_effects = prepared.immune_to_effects;
         self.entries.clear();
         self.entries.extend(prepared.entries.iter().cloned());
         self.hook_mask = prepared.hook_mask;
@@ -153,6 +157,7 @@ impl StateStore {
 
     /// 清空数字 score profile 的战斗状态，同时保留 SmallVec 容量。
     pub fn clear_score_profile_for_reuse(&mut self) {
+        self.immune_to_effects = false;
         self.entries.clear();
         self.hook_mask = ProcMask::NONE;
         self.generation = 0;
@@ -249,7 +254,8 @@ impl StateStore {
         let mut lazy_infections = 0;
         for entry in &self.entries {
             match &entry.payload {
-                StatePayload::Haste { effective_faster, .. } => speed *= *effective_faster,
+                // 高额速度叠加疾走时饱和，避免长战斗反向回绕。
+                StatePayload::Haste { effective_faster, .. } => speed = speed.saturating_mul(*effective_faster),
                 StatePayload::Slow { .. } => speed /= 2,
                 StatePayload::LazyInfection { .. } => lazy_infections += 1,
                 _ => {}
@@ -428,6 +434,9 @@ impl StateStore {
 
     /// 替换指定键的载荷并刷新缓存；键不存在返回 false。
     pub fn set_payload(&mut self, legacy_order_key: u32, payload: StatePayload) -> bool {
+        if self.immune_to_effects {
+            return false;
+        }
         let Some(index) = self.entries.iter().position(|entry| entry.legacy_order_key == legacy_order_key) else {
             return false;
         };
@@ -442,6 +451,9 @@ impl StateStore {
 
     /// 添加状态条目并更新缓存；同键已存在返回 false。
     pub fn add_entry(&mut self, entry: StateEntry) -> bool {
+        if self.immune_to_effects {
+            return false;
+        }
         if self.entries.iter().any(|current| current.legacy_order_key == entry.legacy_order_key) {
             return false;
         }

@@ -1,6 +1,8 @@
 //! 东方角色的人偶、分身与式神沿用原生召唤物归属和死亡链。
 use super::super::*;
 use crate::runtime::entity::RosmonticRuntime;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(pcb_summons)]
 impl CombatRuntime {
     pub(super) fn pcb_spawn(
         &mut self,

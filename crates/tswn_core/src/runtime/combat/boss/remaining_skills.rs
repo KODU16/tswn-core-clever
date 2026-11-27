@@ -1,5 +1,7 @@
 //! 紫的境界、AL1S 的程式与兔狐小队主动技能。
 use super::super::*;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(remaining_skills)]
 impl CombatRuntime {
     pub(super) fn remaining_cast(&mut self, a: EntityIdx, skill: usize, release: bool, u: &mut RunUpdates) {
         let name = self.entities.get(a).unwrap().template.name.clone();

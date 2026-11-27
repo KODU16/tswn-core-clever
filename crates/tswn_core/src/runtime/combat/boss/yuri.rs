@@ -2,9 +2,15 @@
 use super::super::*;
 use crate::runtime::lang::keys;
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(yuri)]
 impl CombatRuntime {
     /// 尤里的心灵控制目标：不看 smart，只要目标不在自身当前队伍、没有魅惑。
     pub fn select_plain_yuri_control_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         let actor_team = self.plain_effective_team(actor);
         let target_pool = Self::quilt_target_pool(&self.entities, &self.world);
         let all_alive = target_pool.as_ref();
@@ -62,6 +68,10 @@ impl CombatRuntime {
 
     /// `SklYuriControl`：不做免疫与闪避判定，层数取目标队伍初始人数下限 3。
     pub fn drain_plain_yuri_control_into(&mut self, actor: EntityIdx, target: EntityIdx, updates: &mut RunUpdates) {
+        // 餐厅的绝对免疫优先于尤里的无判定控制。
+        if self.is_restaurant(target) {
+            return;
+        }
         updates.add(RunUpdate::new_lang(
             keys::SKL_YURI_CONTROL,
             actor.0 as usize,

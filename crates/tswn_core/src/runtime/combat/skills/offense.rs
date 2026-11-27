@@ -1,5 +1,7 @@
 use super::super::*;
 
+// 通过同一调用凭据捕获原版与武器技能，不复制效果公式。
+#[tswn_skill_capture::capture_skills(standard_offense)]
 impl CombatRuntime {
     /// 按选中的内置主动技能分派到对应技能实现；能力作用域限定于实际施法者。
     pub fn drain_plain_builtin_skill_into(
@@ -8,6 +10,21 @@ impl CombatRuntime {
         prepared: PreparedBuiltinSkillAction,
         updates: &mut RunUpdates,
     ) {
+        // 餐厅拒绝所有指向它的技能效果，包括治疗和增益。
+        if prepared.targets.iter().any(|t| self.is_restaurant(*t)) {
+            for t in &prepared.targets {
+                if self.is_restaurant(*t) {
+                    updates.add(RunUpdate::new("[1]免疫了技能效果", actor.0 as usize, t.0 as usize, 1));
+                }
+            }
+            let mut prepared = prepared;
+            prepared.targets.retain(|t| !self.is_restaurant(*t));
+            if prepared.targets.is_empty() {
+                return;
+            }
+            self.drain_plain_builtin_skill_into(actor, prepared, updates);
+            return;
+        }
         // 效果倍率限定于实际施法者的能力作用域。
         #[cfg(feature = "cards")]
         let _ability = self.ability_scope(actor, prepared.selected.skill.export_name());
@@ -139,6 +156,10 @@ impl CombatRuntime {
 
     /// 默认选敌：按聪明与否的配额在存活敌人中抽取并评分排序。
     pub fn select_plain_default_enemy_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         self.select_plain_default_enemy_targets_with_count(actor, smart, if smart { 3 } else { 2 })
     }
 
@@ -446,6 +467,10 @@ impl CombatRuntime {
 
     /// 狂暴选目标：聪明时排除已狂暴目标与战斗使魔。
     pub fn select_plain_berserk_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         self.select_plain_filtered_enemy_targets(
             actor,
             smart,
@@ -509,6 +534,10 @@ impl CombatRuntime {
 
     /// 加速选目标：同队存活成员，聪明时有体力下限与状态重叠限制。
     pub fn select_plain_haste_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         let actor_team = self.plain_effective_team(actor);
         let candidates = self.world.team_alive(actor_team).unwrap_or_default();
         if candidates.is_empty() {
@@ -719,6 +748,10 @@ impl CombatRuntime {
 
     /// 连击选目标：聪明抽 5 个、普通抽 3 个敌人并按评分排序。
     pub fn select_plain_rapid_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         let actor_team = self.plain_effective_team(actor);
         let target_pool = Self::quilt_target_pool(&self.entities, &self.world);
         let all_alive = target_pool.as_ref();

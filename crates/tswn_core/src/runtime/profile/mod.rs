@@ -22,7 +22,7 @@ pub use hooks::*;
 pub use registry::*;
 
 /// 内置主动技能枚举，覆盖普通技能、召唤物技能与武器/修改器技能。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum BuiltinActiveSkill {
     Fire,
     Ice,

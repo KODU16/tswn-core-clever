@@ -1,5 +1,7 @@
 //! 机械支援和游戏开发部伙伴均走原生召唤物死亡、伤害与归属链。
 use super::super::*;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(remaining_children)]
 impl CombatRuntime {
     pub(super) fn remaining_child_action(&mut self, a: EntityIdx, role: u8, u: &mut RunUpdates) {
         // 掩体、地雷和支援直升机没有主动普攻。

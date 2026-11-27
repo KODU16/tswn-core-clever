@@ -35,7 +35,7 @@ impl CombatRuntime {
             .iter()
             .filter_map(|(idx, entity)| entity.runtime.squall.is_some().then_some(idx))
             .collect();
-        Self {
+        let mut runtime = Self {
             entities,
             world,
             scheduler,
@@ -46,6 +46,7 @@ impl CombatRuntime {
             replay_renderers,
             show_renderers,
             squall_bosses,
+            restaurant_bosses: Vec::new(),
             scratch: BattleScratch::default(),
             template_slots,
             slots,
@@ -55,7 +56,9 @@ impl CombatRuntime {
             #[cfg(not(feature = "no_debug"))]
             trace: None,
             round: 0,
-        }
+        };
+        runtime.restaurant_init();
+        runtime
     }
 
     #[cfg(not(feature = "no_debug"))]

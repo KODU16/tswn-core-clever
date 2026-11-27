@@ -1,5 +1,7 @@
 use super::super::*;
 
+// 通过同一调用凭据捕获原版与武器技能，不复制效果公式。
+#[tswn_skill_capture::capture_skills(standard_summon)]
 impl CombatRuntime {
     pub fn plain_summon_probability_allowed(&self, actor: EntityIdx, smart: bool) -> bool {
         let owner = self

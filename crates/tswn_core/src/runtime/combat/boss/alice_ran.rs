@@ -1,5 +1,7 @@
 //! 爱丽丝的人偶编队、舞台剧、自爆与八云蓝的式神召唤。
 use super::super::*;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(alice_ran)]
 impl CombatRuntime {
     /// 直接读取仍存活的人偶，死亡或自爆后即可再次召唤，不依赖易失计数器。
     pub(super) fn pcb_dolls(&self, actor: EntityIdx) -> Vec<EntityIdx> {

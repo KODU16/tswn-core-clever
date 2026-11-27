@@ -4,6 +4,8 @@ use super::EntityIdx;
 #[serde(default)]
 pub struct RosmonticRuntime {
     pub actions: u32,
+    /// 餐厅按需分配日志材料，普通 Boss 不分配额外容器。
+    pub restaurant: Option<Box<super::RestaurantRuntime>>,
     /// 涵虚的累计失血、翻面和临时状态随快照保存，菜只使用倒计时。
     pub rv_loss: u64,
     pub rv_inequalities: u32,

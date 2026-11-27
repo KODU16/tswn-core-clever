@@ -54,6 +54,8 @@ mod lifecycle;
 mod passive;
 mod round;
 mod skills;
+// 技能抓取元数据与原函数重放共用入口。
+mod skill_capture;
 
 pub use skills::assassinate::PlainSkillPreActionOutcome;
 
@@ -73,7 +75,7 @@ pub struct RoundOutcome {
 }
 
 /// 调度阶段选中的内置主动技能，附普攻/技能共用的固定 lane 编号。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SelectedBuiltinSkill {
     pub skill: BuiltinActiveSkill,
     pub fixed_lane: usize,
@@ -83,13 +85,13 @@ pub struct SelectedBuiltinSkill {
 pub type PreparedTargetList = smallvec::SmallVec<[EntityIdx; 8]>;
 
 /// 一个内置主动技能的完整行动计划：选中的技能加上由技能 `aa` 规则选出的目标列表。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PreparedBuiltinSkillAction {
     pub selected: SelectedBuiltinSkill,
     pub targets: PreparedTargetList,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 /// Boss `k4` 扫描选中的专属或通用主动技能；`targets` 由技能自身的 `aa` 选出。
 pub struct PreparedBossSkillAction {
     pub selected: crate::namerena::BossActionSkill,
@@ -97,7 +99,7 @@ pub struct PreparedBossSkillAction {
 }
 
 /// 普通攻击命中时附加的伤害效果；新冠（covid）与懒羊羊（lazy）变体记录传染源与变异值。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PlainAttackOnDamage {
     None,
     Absorb,
@@ -156,6 +158,7 @@ pub enum PreparedPlainAction {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BattleScratch {
     pub selected_actor_round: u64,
+    pub replay_skill_target: Option<(EntityIdx, EntityIdx)>,
     /// 本场各实体的技能储备；整场复位时清空，回合结束保留。
     pub skill_reserves: Vec<crate::runtime::skill_reserve::SkillReserve>,
     /// 百万分倍率；零表示默认1倍，仅改变Clever储备份额。
@@ -168,6 +171,7 @@ impl BattleScratch {
     /// 复位临时游标，避免把上一局的选中回合带入下一局。
     pub fn clear(&mut self) {
         self.selected_actor_round = 0;
+        self.replay_skill_target = None;
         self.search_turn = None;
         self.skill_reserves.clear();
         self.clever_skill_multiplier_micros = 0;
@@ -187,6 +191,8 @@ pub struct CombatRuntime {
     pub show_renderers: ShowRenderers,
     /// 固定记录科研 Boss 的实体槽，普通对局不扫描所有实体。
     pub squall_bosses: Vec<EntityIdx>,
+    /// 只在存在餐厅时开启语义日志收集，普通对局维持无帧快路径。
+    pub restaurant_bosses: Vec<EntityIdx>,
     pub scratch: BattleScratch,
     pub template_slots: TemplateSlotStorage,
     pub slots: BattleSlotStorage,

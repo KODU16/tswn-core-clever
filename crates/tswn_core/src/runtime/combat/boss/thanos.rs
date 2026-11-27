@@ -118,6 +118,8 @@ use super::super::*;
 use crate::runtime::lang::keys;
 use crate::runtime::update::RunUpdateHp;
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(thanos)]
 impl CombatRuntime {
     /// 敌方存活列表：全场存活者里排除自己、排除与自己有效队伍同队者。
     ///
@@ -125,6 +127,10 @@ impl CombatRuntime {
     /// 自己被显式排除（被迷惑时也不会把自己算成敌人），队伍口径用有效队伍（迷惑会改写
     /// allyGroup），召唤物沿用 owner 的队伍对象因此算同队。
     fn plain_thanos_snap_enemies(&self, actor: EntityIdx) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         let actor_team = self.plain_effective_team(actor);
         let mut enemies = PreparedTargetList::new();
         for &idx in self.world.flat_alive() {
@@ -145,6 +151,10 @@ impl CombatRuntime {
     /// [`Self::drain_plain_thanos_snap_into] 里做，否则死亡回调消耗的随机字节会让后续
     /// 抽取偏移。返回空列表时装配方只把它当作「响指」分支标记。
     pub fn select_plain_thanos_snap_targets(&self, actor: EntityIdx) -> Option<PreparedTargetList> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return Some(smallvec::smallvec![target]);
+        }
         let enemies = self.plain_thanos_snap_enemies(actor);
         let allies = Self::quilt_target_pool(&self.entities, &self.world).len() - enemies.len();
         should_snap(enemies.len(), allies).then(PreparedTargetList::new)

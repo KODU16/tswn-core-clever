@@ -371,7 +371,11 @@ impl CustomBed2Import {
                     // 冴月麟参考属性允许负攻击；其余导入仍保持原有的非负约束。
                     let signed_rin =
                         player.class == crate::namerena::PlayerClass::Boss && player.name == "rin" && status.attack == -26;
-                    if status.max_hp <= 0 || (status.attack < 0 && !signed_rin) || status.defense < 0 || status.resistance < 0 {
+                    // 餐厅指定外显值低于 36，内部七围允许负值且不会执行普攻。
+                    let restaurant = player.class == crate::namerena::PlayerClass::Boss && player.name == "会员制餐厅";
+                    if status.max_hp <= 0
+                        || (!restaurant && ((status.attack < 0 && !signed_rin) || status.defense < 0 || status.resistance < 0))
+                    {
                         return Err(CustomMixedRosterImportError {
                             team_index,
                             player_index,

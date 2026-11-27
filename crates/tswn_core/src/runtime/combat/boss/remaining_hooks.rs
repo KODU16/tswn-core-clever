@@ -1,5 +1,7 @@
 //! 最后一批 Boss 的指令、减伤和分阶段复活，反击标记阻断递归。
 use super::super::*;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(remaining_hooks)]
 impl CombatRuntime {
     /// 沿真实召唤归属读取难度乘区，避免固定威力反击和召唤物漏掉数值调整。
     pub(crate) fn squad_power_scale(&self, mut actor: EntityIdx) -> f64 {

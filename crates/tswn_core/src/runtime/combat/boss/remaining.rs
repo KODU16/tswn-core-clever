@@ -1,5 +1,7 @@
 //! 紫、AL1S 与兔狐小队的逐槽行动选择和公共状态。
 use super::super::*;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(remaining)]
 impl CombatRuntime {
     /// 支援只在自己的战斗队伍内找人，避免两边同名 Boss 串队。
     pub(super) fn squad_member(&self, actor: EntityIdx, name: &str) -> Option<EntityIdx> {
@@ -277,6 +279,10 @@ impl CombatRuntime {
         }
     }
     pub(super) fn select_squad_heal(&self, actor: EntityIdx) -> Vec<EntityIdx> {
+        // 菜品的治疗也固定给本次食客，保留原技能的后续结算。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let team = self.plain_effective_team(actor);
         self.world
             .flat_alive()

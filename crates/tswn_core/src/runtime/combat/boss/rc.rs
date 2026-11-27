@@ -5,6 +5,8 @@ use crate::runtime::entity::RosmonticRuntime;
 const SMALL_KEY: &str = "小@rc";
 const BIG_KEY: &str = "大@rc";
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(rc)]
 impl CombatRuntime {
     /// 独立身份区分专属召唤物，不影响普通同名角色。
     pub(crate) fn is_rc_small(&self, actor: EntityIdx) -> bool {
@@ -71,7 +73,9 @@ impl CombatRuntime {
         } else {
             format!("[0]发动[抽卡]，抽到{count}个小")
         };
-        updates.add(RunUpdate::new(text, actor.0 as usize, actor.0 as usize, 1).without_replay_target());
+        let mut event = RunUpdate::new(text, actor.0 as usize, actor.0 as usize, 1).without_replay_target();
+        event.skill_name = Some(if paid { "RC的同学给RC氪了个648" } else { "抽卡" }.to_owned());
+        updates.add(event);
         for _ in 0..count {
             self.rc_spawn_small(actor, updates);
         }
@@ -153,7 +157,7 @@ impl CombatRuntime {
 
     /// 观察层数独立保存，驱散、净化和普通状态清理均不修改它。
     pub(crate) fn rc_observe(&mut self, actor: EntityIdx, target: EntityIdx, updates: &mut RunUpdates) {
-        if !self.rc_children(actor).contains(&target) {
+        if self.captured_skill_target(actor).is_none() && !self.rc_children(actor).contains(&target) {
             return;
         }
         let small = self.is_rc_small(target);
@@ -161,7 +165,9 @@ impl CombatRuntime {
         let s = self.ros_state(target);
         let previous = s.rc_observations;
         s.rc_observations = s.rc_observations.saturating_add(1);
-        updates.add(RunUpdate::new("[0]观察了[1]", actor.0 as usize, target.0 as usize, 1));
+        let mut event = RunUpdate::new("[0]观察了[1]", actor.0 as usize, target.0 as usize, 1);
+        event.skill_name = Some("观察".to_owned());
+        updates.add(event);
         if small && previous == 0 {
             // 施法回合末减一次，保留随后两个自身回合；重复触发刷新而不叠乘。
             self.ros_state(actor).rc_boost_turns = 3;
@@ -202,12 +208,13 @@ impl CombatRuntime {
 
     /// 以当前 HP 最低为准，治疗存活的小；不治疗大、尸体或其他 RC 的召唤物。
     pub(crate) fn rc_heal_small(&mut self, actor: EntityIdx, updates: &mut RunUpdates) {
-        let Some(target) = self
-            .rc_children(actor)
-            .into_iter()
-            .filter(|id| self.is_rc_small(*id))
-            .min_by_key(|id| self.entities.get(*id).unwrap().runtime.hp)
-        else {
+        // 喂菜时治疗指定食客；正常出招仍只治疗自己的小。
+        let Some(target) = self.captured_skill_target(actor).or_else(|| {
+            self.rc_children(actor)
+                .into_iter()
+                .filter(|id| self.is_rc_small(*id))
+                .min_by_key(|id| self.entities.get(*id).unwrap().runtime.hp)
+        }) else {
             return;
         };
         let e = self.entities.get_mut(target).unwrap();

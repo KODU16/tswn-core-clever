@@ -3,6 +3,8 @@ use super::super::*;
 use crate::runtime::entity::RosmonticRuntime;
 const VEGETABLE: &str = "菜@ReturnVoid";
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(return_void)]
 impl CombatRuntime {
     pub(crate) fn is_return_void_actor(&self, id: EntityIdx) -> bool {
         self.is_rosmontic_boss(id, "ReturnVoid")
@@ -162,6 +164,9 @@ impl CombatRuntime {
             0 => {
                 let targets = self.ros_enemies(id, usize::MAX);
                 if let Some(t) = targets.into_iter().min_by_key(|t| self.entities.get(*t).unwrap().runtime.hp) {
+                    if self.is_restaurant(t) {
+                        return;
+                    }
                     let a = self.entities.get(id).unwrap().runtime.hp;
                     let b = self.entities.get(t).unwrap().runtime.hp;
                     self.entities.get_mut(id).unwrap().runtime.hp = b;

@@ -1,5 +1,7 @@
 //! 第二批东方 Boss 的行动计时、减伤、招架、受伤和复活钩子。
 use super::super::*;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(pcb_hooks)]
 impl CombatRuntime {
     pub(super) fn begin_pcb_action(&mut self, actor: EntityIdx, updates: &mut RunUpdates) {
         if self.is_rosmontic_boss(actor, "chen") {

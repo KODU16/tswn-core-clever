@@ -4513,6 +4513,7 @@ dependencies = [
  "sha2",
  "smallvec",
  "toml",
+ "tswn_skill_capture",
 ]
 
 [[package]]
@@ -4595,6 +4596,15 @@ dependencies = [
  "serde_json",
  "smallvec",
  "tswn_core",
+]
+
+[[package]]
+name = "tswn_skill_capture"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

@@ -1,5 +1,7 @@
 use super::super::*;
 
+// 通过同一调用凭据捕获原版与武器技能，不复制效果公式。
+#[tswn_skill_capture::capture_skills(standard_control)]
 impl CombatRuntime {
     /// 瘟疫技能：按魔法与目标抗性计算百分比扣血，蓄力时必中。
     pub fn drain_plain_half_skill_into(&mut self, actor: EntityIdx, target: EntityIdx, updates: &mut RunUpdates) {
@@ -11,7 +13,7 @@ impl CombatRuntime {
         ));
 
         // 被子固定回避，优先于蓄力必中，且不扣体力或行动点。
-        if self.is_quilt(target) || self.quilt_minion_sleeping(target) {
+        if self.is_restaurant(target) || self.is_quilt(target) || self.quilt_minion_sleeping(target) {
             updates.add(crate::runtime::update::RunUpdate::new(
                 "[0][回避]了攻击",
                 target.0 as usize,
@@ -113,6 +115,10 @@ impl CombatRuntime {
 
     /// 冰冻选目标：全部存活敌人均可作候选。
     pub fn select_plain_ice_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         self.select_plain_filtered_enemy_targets(actor, smart, |target, _| target.is_some(), Self::score_plain_ice_target)
     }
 
@@ -465,10 +471,16 @@ impl CombatRuntime {
                 .set(slot, SlotValue::PlayerTemplate(Box::new(template)))
                 .expect("runtime core zombie blueprint slot must exist");
         }
+        // 成功生成敌方分身后，餐厅的烹饪次数增加十次。
+        self.restaurant_cloned(actor);
     }
 
     /// 生命之轮选目标：只考虑体力高于自身的敌人，聪明时要求高出 32 以上。
     pub fn select_plain_exchange_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         let actor_hp = self
             .entities
             .get(actor)
@@ -563,6 +575,10 @@ impl CombatRuntime {
         target: EntityIdx,
         updates: &mut RunUpdates,
     ) {
+        // 生命交换也不能修改餐厅血量。
+        if self.is_restaurant(target) {
+            return;
+        }
         let current_level = self
             .entities
             .get(actor)

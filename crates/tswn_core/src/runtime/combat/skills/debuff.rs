@@ -1,8 +1,14 @@
 use super::super::*;
 
+// 通过同一调用凭据捕获原版与武器技能，不复制效果公式。
+#[tswn_skill_capture::capture_skills(standard_debuff)]
 impl CombatRuntime {
     /// 瘟疫（half）选目标：聪明时只考虑体力在 160 到 400 之间的敌人。
     pub fn select_plain_half_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         self.select_plain_filtered_enemy_targets(
             actor,
             smart,
@@ -40,6 +46,10 @@ impl CombatRuntime {
 
     /// 诅咒选目标：聪明时要求体力不低于 80，且未携带高概率诅咒。
     pub fn select_plain_curse_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         self.select_plain_filtered_enemy_targets(
             actor,
             smart,

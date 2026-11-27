@@ -40,6 +40,9 @@ pub use cirno::*;
 pub use fish::*;
 pub use quilt::*;
 pub use rosmontic::*;
+// 餐厅食材及烹饪进度共用实体快照。
+mod restaurant;
+pub use restaurant::*;
 pub use runtime::*;
 pub use skill_loadout::*;
 pub use smdd::*;
@@ -383,7 +386,7 @@ impl PlayerTemplate {
         let name = name.into();
         // 冴月麟固定为 -26 攻击，保留有符号语义而不改写普通角色约束。
         assert!(
-            attack >= 0 || (name == "rin" && attack == -26),
+            attack >= 0 || (name == "rin" && attack == -26) || name == "会员制餐厅",
             "runtime player attack must be non-negative"
         );
         Self {
@@ -508,7 +511,7 @@ impl PlayerTemplate {
     pub fn with_magic(mut self, magic: i32) -> Self {
         // 与攻击一样，参考版冴月麟的魔力为 -26。
         assert!(
-            magic >= 0 || (self.name == "rin" && magic == -26),
+            magic >= 0 || (self.name == "rin" && magic == -26) || self.name == "会员制餐厅",
             "runtime player magic must be non-negative"
         );
         self.magic = magic;
@@ -523,7 +526,11 @@ impl PlayerTemplate {
 
     /// 设置智慧；必须非负。
     pub fn with_wisdom(mut self, wisdom: i32) -> Self {
-        assert!(wisdom >= 0, "runtime player wisdom must be non-negative");
+        // 餐厅指定的外显属性低于 36，内部值允许为负。
+        assert!(
+            wisdom >= 0 || self.name == "会员制餐厅",
+            "runtime player wisdom must be non-negative"
+        );
         self.wisdom = wisdom;
         self
     }
@@ -568,8 +575,16 @@ impl PlayerTemplate {
 
     /// 设置防御与抗性；两者必须非负。
     pub fn with_def_res(mut self, defense: i32, resistance: i32) -> Self {
-        assert!(defense >= 0, "runtime player defense must be non-negative");
-        assert!(resistance >= 0, "runtime player resistance must be non-negative");
+        // 餐厅指定的外显属性低于 36，内部值允许为负。
+        assert!(
+            defense >= 0 || self.name == "会员制餐厅",
+            "runtime player defense must be non-negative"
+        );
+        // 餐厅指定的外显属性低于 36，内部值允许为负。
+        assert!(
+            resistance >= 0 || self.name == "会员制餐厅",
+            "runtime player resistance must be non-negative"
+        );
         self.defense = defense;
         self.resistance = resistance;
         self
@@ -577,7 +592,11 @@ impl PlayerTemplate {
 
     /// 设置敏捷；必须非负。
     pub fn with_agility(mut self, agility: i32) -> Self {
-        assert!(agility >= 0, "runtime player agility must be non-negative");
+        // 餐厅指定的外显属性低于 36，内部值允许为负。
+        assert!(
+            agility >= 0 || self.name == "会员制餐厅",
+            "runtime player agility must be non-negative"
+        );
         self.agility = agility;
         self
     }

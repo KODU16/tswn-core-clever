@@ -20,6 +20,11 @@ pub mod rc;
 mod rc_tests;
 mod reimu_marisa;
 mod return_void;
+// 餐厅的免疫、食材记录与两回合做菜流程。
+mod restaurant;
+mod restaurant_methods;
+#[cfg(test)]
+mod restaurant_tests;
 #[cfg(test)]
 mod return_void_tests;
 pub mod rosmontic;

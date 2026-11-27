@@ -1,5 +1,7 @@
 //! 帕秋莉五行连锁、咲夜时停连击和蕾米莉亚的鲜红印记。
 use super::super::*;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(scarlet_mansion)]
 impl CombatRuntime {
     pub(super) fn ros_patchouli(&mut self, actor: EntityIdx, skill: usize, targets: Vec<EntityIdx>, updates: &mut RunUpdates) {
         const TEXT: [&str; 11] = [

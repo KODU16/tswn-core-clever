@@ -7,7 +7,7 @@
  * @typedef {import("./show-types.js").InvolvedSet} InvolvedSet
  */
 
-import { createShowPlayback } from "./show-playback.js?v=20261126ui1";
+import { createShowPlayback } from "./show-playback.js?v=20261127restaurant3";
 import { createRateChart } from "./show-rate-chart.js?v=20261125line1";
 import { setupBossPicker } from "./show-boss-picker.js?v=20261126grid1";
 import { setupRateWindow } from "./show-rate-window.js?v=20261125png1";
@@ -19,7 +19,7 @@ import {
   validateReplayInput,
 } from "./show-utils.js?v=20261125rates1";
 import { buildPlayerDetailHtml } from "./show-detail.js?v=20261125rates1";
-import { renderIdleState, statsPanelHtml } from "./show-render.js?v=20261126ui1";
+import { renderIdleState, statsPanelHtml } from "./show-render.js?v=20261127restaurant3";
 import {
   createReplayPlan,
   appendFrameToReplayPlan,
@@ -29,7 +29,7 @@ import {
   buildShowShareUrl,
   readStaticReplayInputFromSearch,
 } from "./show-routing.js?v=20261127returnvoid1";
-import { ensureApi, createBattleStreamSource, normalizeStateRateRounds, loadBattleIcon } from "./show-wasm.js?v=20261127returnvoid1";
+import { ensureApi, createBattleStreamSource, normalizeStateRateRounds, loadBattleIcon } from "./show-wasm.js?v=20261127restaurant3";
 
 import { parseScoreTestInput, scoreCheckpointHtml } from "./show-score-test.js?v=20261127returnvoid1";
 import { winRateTableHtml } from "./show-win-rate.js?v=20261125rates1";

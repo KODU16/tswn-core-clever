@@ -18,6 +18,8 @@ const SHOW_SKILL_DIALOGUE: bool = false;
 /// 禁言的固定魔力下限。
 pub const TYRANNY_MP_FLOOR: i32 = -64;
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(squall)]
 impl CombatRuntime {
     /// 派生独立的演出随机数，读取当前检查点但不消费战斗 RNG，也不窥视后续随机序列。
     pub fn next_squall_sample_quote(&mut self, actor: EntityIdx) -> &'static str {
@@ -62,6 +64,10 @@ impl CombatRuntime {
     }
 
     fn squall_enemies(&self, actor: EntityIdx, main_only: bool) -> Vec<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let team = self.plain_effective_team(actor);
         self.world
             .flat_alive()

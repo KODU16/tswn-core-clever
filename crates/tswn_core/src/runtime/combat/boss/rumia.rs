@@ -1,5 +1,7 @@
 //! 露米娅：黑雾反击、两次月影增防与濒死毁灭模式。
 use super::super::*;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(rumia)]
 impl CombatRuntime {
     pub(crate) fn reflect_rumia_into(&mut self, target: EntityIdx, caster: EntityIdx, updates: &mut RunUpdates) {
         if !self.is_rosmontic_boss(target, "rumia") || !self.entities.get(caster).is_some_and(|e| e.is_active()) {

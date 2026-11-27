@@ -2,6 +2,8 @@
 use super::super::*;
 use crate::runtime::entity::RosmonticRuntime;
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(touhou)]
 impl CombatRuntime {
     pub(crate) fn has_rosmontic_action(&self, actor: EntityIdx) -> bool {
         self.entities.get(actor).is_some_and(|e| {
@@ -57,6 +59,10 @@ impl CombatRuntime {
     }
 
     pub(super) fn ros_enemies(&mut self, actor: EntityIdx, count: usize) -> Vec<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let team = self.plain_effective_team(actor);
         let mut targets: Vec<_> = self
             .world
@@ -100,6 +106,9 @@ impl CombatRuntime {
 
     /// 同时写入当前值与属性覆盖，避免后续疾走或迟缓刷新丢失变化。
     pub(super) fn ros_stat(&mut self, actor: EntityIdx, index: usize, factor: f64, delta: i32) {
+        if self.is_restaurant(actor) {
+            return;
+        }
         let state = self.ros_state(actor);
         let old = f64::from_bits(state.stat_scale_bits[index]);
         let old = if old == 0.0 { 1.0 } else { old };
@@ -231,6 +240,9 @@ impl CombatRuntime {
     }
 
     pub(super) fn ros_immune(&mut self, target: EntityIdx, key: &str) -> bool {
+        if self.is_restaurant(target) {
+            return true;
+        }
         if matches!(key, "assassinate" | "disperse") && self.rv_immune(target) {
             return true;
         }
@@ -411,6 +423,10 @@ impl CombatRuntime {
     }
 
     fn ros_skill_targets(&mut self, actor: EntityIdx, skill: usize) -> Vec<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let name = self.entities.get(actor).unwrap().template.name.as_str();
         let smart = self.entities.get(actor).unwrap().runtime.rosmontic.as_ref().unwrap().smart;
         match (name, skill) {

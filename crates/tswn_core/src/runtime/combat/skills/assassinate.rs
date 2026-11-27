@@ -7,6 +7,8 @@ pub struct PlainSkillPreActionOutcome {
     pub clear_forced_action: bool,
 }
 
+// 通过同一调用凭据捕获原版与武器技能，不复制效果公式。
+#[tswn_skill_capture::capture_skills(standard_assassinate)]
 impl CombatRuntime {
     /// 执行行动前的 pre-action 累积：解除隐匿、把待发暗杀转为强制技能，并标记是否清除强制行动。
     pub fn run_plain_skill_pre_action_accumulator(&mut self, actor: EntityIdx) -> PlainSkillPreActionOutcome {
@@ -82,6 +84,10 @@ impl CombatRuntime {
     }
 
     pub fn select_plain_assassinate_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         if self.entities.get(actor).is_some_and(|entity| entity.runtime.assassinate.is_some()) {
             return PreparedTargetList::new();
         }

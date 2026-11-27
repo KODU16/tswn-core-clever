@@ -1,5 +1,7 @@
 use super::super::*;
 
+// 通过同一调用凭据捕获原版与武器技能，不复制效果公式。
+#[tswn_skill_capture::capture_skills(standard_team)]
 impl CombatRuntime {
     /// 实体的有效队伍：被魅惑时按魅惑指定的队伍，否则取运行时队伍。
     pub fn plain_effective_team(&self, actor: EntityIdx) -> usize {
@@ -50,6 +52,10 @@ impl CombatRuntime {
 
     /// 魅惑选目标：敌方存活者，聪明时排除已带深层魅惑的目标。
     pub fn select_plain_charm_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         #[cfg(not(feature = "no_debug"))]
         let before = (self.rng.i, self.rng.j);
         let actor_team = self.plain_effective_team(actor);
@@ -300,6 +306,10 @@ impl CombatRuntime {
 
     /// 治疗选目标：同队存活且未满血的成员，聪明时要求差距超过 80。
     pub fn select_plain_heal_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         let actor_team = self.plain_effective_team(actor);
         let candidates = self.world.team_alive(actor_team).unwrap_or_default();
         #[cfg(not(feature = "no_debug"))]
@@ -581,6 +591,10 @@ impl CombatRuntime {
 
     /// 驱散选目标：敌方存活者，按共用评分排序。
     pub fn select_plain_disperse_targets(&mut self, actor: EntityIdx, smart: bool) -> PreparedTargetList {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return smallvec::smallvec![target];
+        }
         let actor_team = self.plain_effective_team(actor);
         let target_pool = Self::quilt_target_pool(&self.entities, &self.world);
         let all_alive = target_pool.as_ref();

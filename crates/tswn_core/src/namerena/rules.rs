@@ -4,7 +4,8 @@
 pub const SAITAMA_RETIREMENT_WINNER: &str = "SAITAMA";
 
 /// 内置 Boss 名字表；用于身份分类、默认技能与免疫规则查询。
-pub const BOSS_NAMES: [&str; 54] = [
+pub const BOSS_NAMES: [&str; 55] = [
+    "会员制餐厅",
     "ReturnVoid",
     "rc",
     "mario",
@@ -223,7 +224,7 @@ pub fn boss_default_skill_levels(name: &str) -> &'static [(usize, u32)] {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 /// 0.5.5 中各 Boss `ac()` 写入 `k1`、随后由通用扫描进入 `k4` 的主动技能。
 ///
 /// 通用技能沿用现有内置实现；专属技能（`IceAge`、`IkarugaAttack`、`MarioGet`、
@@ -267,6 +268,8 @@ pub enum BossActionSkill {
 /// 马里奥的火球术初始等级为 0，吃到火焰花后由状态载荷改写为 120。
 pub fn boss_action_skills(name: &str) -> &'static [(BossActionSkill, u32)] {
     match boss_combat_name(name) {
+        // 餐厅专属行动沿用自定义 Boss 派发。
+        "会员制餐厅" => &[(BossActionSkill::Rosmontic, 256)],
         "ReturnVoid" => &[(BossActionSkill::Rosmontic, 256)],
         "rc" => &[(BossActionSkill::Rc, 256)],
         "aokiji" => &[(BossActionSkill::IceAge, 70), (BossActionSkill::Ice, 80)],
@@ -327,6 +330,8 @@ pub fn boss_action_prob_count(name: &str) -> usize {
 /// 返回 0 表示恒不免疫且不抽样；`piston` 是毒状态在 0.5.5 中的键名。
 pub fn boss_immune_threshold(name: &str, key: &str) -> i32 {
     match boss_combat_name(name) {
+        // 餐厅无条件免疫任何状态；快照与直接技能入口共用该阈值。
+        "会员制餐厅" => 256,
         // 琪露诺没有状态免疫名单，冰伤免疫另由防御 hook 处理。
         "cirno" | "megia" | "rumia" | "marisa" | "daiyousei" | "hong" | "koakuma" | "patchouli" | "sakuya" | "remilia"
         | "flandre" | "letty" | "chen" | "alice" | "phantom" | "youmu" | "yuyuko" | "ran" => 0,

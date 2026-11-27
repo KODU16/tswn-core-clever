@@ -20,8 +20,14 @@ enum TigerSkill {
     Buff,
 }
 
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(tiger)]
 impl CombatRuntime {
     pub fn tiger_enemies(&self, actor: EntityIdx) -> Vec<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return vec![target];
+        }
         let team = self.plain_effective_team(actor);
         self.world
             .flat_alive()
@@ -110,6 +116,10 @@ impl CombatRuntime {
     }
 
     pub fn tiger_pick_enemy(&mut self, actor: EntityIdx) -> Option<EntityIdx> {
+        // 菜品固定作用于食客，避免原技能再次随机选中其他角色。
+        if let Some(target) = self.captured_skill_target(actor) {
+            return Some(target);
+        }
         let enemies = self.tiger_enemies(actor);
         if enemies.is_empty() {
             return None;

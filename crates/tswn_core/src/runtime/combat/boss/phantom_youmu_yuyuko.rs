@@ -1,5 +1,7 @@
 //! 幽灵乐团的声部、妖梦的招架连斩和幽幽子的反魂蝶。
 use super::super::*;
+// 自动记录实际技能入口，菜品直接重用此处实现。
+#[tswn_skill_capture::capture_skills(phantom_youmu_yuyuko)]
 impl CombatRuntime {
     pub(super) fn ros_phantom(&mut self, actor: EntityIdx, skill: usize, targets: Vec<EntityIdx>, updates: &mut RunUpdates) {
         let texts = [

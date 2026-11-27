@@ -291,7 +291,8 @@ impl PlayerRuntime {
             rosmontic: (flags.contains(PlayerKindFlags::BOSS)
                 && matches!(
                     template.name.as_str(),
-                    "ReturnVoid"
+                    "会员制餐厅"
+                        | "ReturnVoid"
                         | "rin"
                         | "megia"
                         | "rumia"
@@ -506,15 +507,16 @@ impl PlayerRuntime {
     pub fn magic_defense(&self) -> i32 { self.resistance + 64 }
 
     /// 魔法命中：魔法加敏捷。
-    pub fn magic_accuracy(&self) -> i32 { self.magic + self.agility }
+    pub fn magic_accuracy(&self) -> i32 { self.magic.saturating_add(self.agility) }
 
     /// 魔法闪避：抗性加敏捷。
-    pub fn magic_dodge(&self) -> i32 { self.resistance + self.agility }
+    pub fn magic_dodge(&self) -> i32 { self.resistance.saturating_add(self.agility) }
 
     /// 闪避判定：按命中差计算概率并消费一个随机字节。
     pub fn dodge(accuracy: i32, dodge_value: i32, randomer: &mut RC4) -> bool {
         let chance = {
-            let temp = 24 + dodge_value - accuracy;
+            // 长战斗的高额属性不会在命中差的中间计算中回绕。
+            let temp = 24_i64 + i64::from(dodge_value) - i64::from(accuracy);
             if temp < 7 {
                 7
             } else if temp > 64 {
@@ -524,7 +526,7 @@ impl PlayerRuntime {
             }
         };
 
-        randomer.next_u8() as i32 <= chance
+        i64::from(randomer.next_u8()) <= chance
     }
 }
 
@@ -1055,6 +1057,7 @@ impl EntityArena {
                 let owner = EntityIdx(idx as u32);
                 let runtime = PlayerRuntime::from_template(&template, registry, owner, owner);
                 let mut states = StateStore::default();
+                states.immune_to_effects = template.name == "会员制餐厅" && runtime.flags.contains(PlayerKindFlags::BOSS);
                 if runtime.is_minion() {
                     states.register_compressed_legacy_state(CompressedLegacyState::Minion);
                 }
@@ -1181,6 +1184,7 @@ impl EntityArena {
         }
         let runtime = PlayerRuntime::from_template(&template, registry, owner, root_owner);
         let mut states = StateStore::default();
+        states.immune_to_effects = template.name == "会员制餐厅" && runtime.flags.contains(PlayerKindFlags::BOSS);
         if runtime.is_minion() {
             states.register_compressed_legacy_state(CompressedLegacyState::Minion);
         }

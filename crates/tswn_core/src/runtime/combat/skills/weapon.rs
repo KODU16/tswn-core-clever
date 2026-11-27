@@ -4,6 +4,8 @@ use crate::runtime::update::RunUpdateHp;
 /// `SklS11` 强化提示里的属性名，按语言包 `detail` 的槽位顺序拆分得到。
 const WEAPON_S11_ATTR_NAMES: [&str; 7] = ["攻", "防", "速", "敏", "魔", "抗", "智"];
 
+// 通过同一调用凭据捕获原版与武器技能，不复制效果公式。
+#[tswn_skill_capture::capture_skills(standard_weapon)]
 impl CombatRuntime {
     /// 0.5.5 `SklS11.v`：促销日购买武器，强化属性或掉落耐久，最后按耐久自伤。
     pub fn drain_plain_weapon_s11_skill_into(&mut self, actor: EntityIdx, updates: &mut RunUpdates) {

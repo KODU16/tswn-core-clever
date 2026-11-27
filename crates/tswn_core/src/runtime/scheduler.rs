@@ -172,8 +172,10 @@ impl PhaseScheduler {
                 let step_roll = (randomer.next_u8() & 3) as i32;
                 let speed = entity.effective_speed();
                 let move_state = &mut entity.runtime.move_state;
-                let (step, ice_released) = entity.states.apply_ice_pre_step(speed * step_roll, move_state.speed_points);
-                move_state.speed_points += step;
+                let (step, ice_released) =
+                    entity.states.apply_ice_pre_step(speed.saturating_mul(step_roll), move_state.speed_points);
+                // 极端叠速仍保持可行动，不能让行动条整数回绕。
+                move_state.speed_points = move_state.speed_points.saturating_add(step);
                 let should_act = move_state.speed_points > MOVE_POINT_THRESHOLD;
                 if should_act {
                     move_state.speed_points -= MOVE_POINT_THRESHOLD;
@@ -216,8 +218,9 @@ impl PhaseScheduler {
                 let move_points_before = actor.runtime.move_state.speed_points;
                 let (step, ice_released) = actor
                     .states
-                    .apply_ice_pre_step(effective_speed * step_roll, actor.runtime.move_state.speed_points);
-                actor.runtime.move_state.speed_points += step;
+                    .apply_ice_pre_step(effective_speed.saturating_mul(step_roll), actor.runtime.move_state.speed_points);
+                // 与批量路径相同，高额行动条在可表示范围内饱和。
+                actor.runtime.move_state.speed_points = actor.runtime.move_state.speed_points.saturating_add(step);
                 if actor.runtime.move_state.speed_points > MOVE_POINT_THRESHOLD {
                     actor.runtime.move_state.speed_points -= MOVE_POINT_THRESHOLD;
                     #[cfg(not(feature = "no_debug"))]
