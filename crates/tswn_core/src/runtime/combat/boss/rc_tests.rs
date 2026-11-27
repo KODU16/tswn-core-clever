@@ -46,14 +46,25 @@ fn rc_summons_one_to_three_with_both_skill_texts() {
     let mut counts = [false; 3];
     let mut texts = [false; 2];
     for _ in 0..64 {
-        let before = rt.entities.len();
+        let before = rt.rc_small_count(rc);
         let mut u = RunUpdates::new();
         rt.drain_rc_action_into(rc, &mut u);
-        let count = rt.entities.len() - before;
+        let count = rt.rc_small_count(rc) - before;
         assert!((1..=3).contains(&count));
         counts[count - 1] = true;
         texts[0] |= u.updates.iter().any(|x| x.message == "[0]使用[有点小]");
         texts[1] |= u.updates.iter().any(|x| x.message == "[0]使用[这确实太小了]");
+        // 清空本轮召唤物，再验证下一次独立的随机数量。
+        let children: Vec<_> = rt
+            .entities
+            .iter()
+            .filter(|(id, e)| e.runtime.owner == rc && e.runtime.alive && rt.is_rc_small(*id))
+            .map(|(id, _)| id)
+            .collect();
+        for id in children {
+            rt.entities.get_mut(id).unwrap().runtime.hp = 0;
+            rt.drain_plain_lethal_damage_into(rc, id, &mut RunUpdates::new());
+        }
     }
     assert_eq!(counts, [true; 3]);
     assert_eq!(texts, [true; 2]);
@@ -171,4 +182,34 @@ fn rc_battles_match_captured_and_fast_execution() {
         assert_eq!(captured.runtime().entities, fast.runtime().entities);
         assert_eq!(fast.runtime().entities, replay.runtime().entities);
     }
+}
+
+/// 五只时只补一只，满员不新增，死亡后恢复名额。
+#[test]
+fn rc_small_cap_limits_living_summons_and_refills_after_death() {
+    let (mut r, rc, enemy) = battle();
+    let rt = r.runtime_mut();
+    let mut u = RunUpdates::new();
+    let first = rt.rc_spawn_small(rc, &mut u);
+    for _ in 0..4 {
+        rt.rc_spawn_small(rc, &mut u);
+    }
+    assert_eq!(rt.rc_small_count(rc), 5);
+    rt.drain_rc_action_into(rc, &mut u);
+    assert_eq!(rt.rc_small_count(rc), 6);
+    let full_len = rt.entities.len();
+    for _ in 0..32 {
+        rt.drain_rc_action_into(rc, &mut u);
+    }
+    assert_eq!(rt.rc_small_count(rc), 6);
+    assert_eq!(rt.entities.len(), full_len);
+    // 存活召唤物即使改变队伍也占名额，按召唤归属计数。
+    let team = rt.entities.get(enemy).unwrap().runtime.team;
+    rt.entities.get_mut(first).unwrap().runtime.team = team;
+    assert_eq!(rt.rc_small_count(rc), 6);
+    rt.entities.get_mut(first).unwrap().runtime.hp = 0;
+    rt.drain_plain_lethal_damage_into(enemy, first, &mut u);
+    assert_eq!(rt.rc_small_count(rc), 5);
+    rt.drain_rc_action_into(rc, &mut u);
+    assert_eq!(rt.rc_small_count(rc), 6);
 }

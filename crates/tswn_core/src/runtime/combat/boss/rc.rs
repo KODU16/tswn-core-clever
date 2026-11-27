@@ -5,6 +5,7 @@ use crate::runtime::entity::RosmonticRuntime;
 
 pub const SMALL_SOURCE: &str = "Bascor cW1JWDuv7f@RbCl";
 const SMALL_KEY: &str = "小@rc";
+const SMALL_CAP: usize = 6;
 
 impl CombatRuntime {
     /// 独立身份键区分“小”和普通同名角色，不借用 Boss 免疫或召唤物技能表。
@@ -20,6 +21,14 @@ impl CombatRuntime {
                 .entities
                 .get(actor)
                 .is_some_and(|e| e.template.name == "rc" && e.runtime.flags.contains(PlayerKindFlags::BOSS))
+    }
+
+    /// 按真实归属统计存活召唤物，魅惑换队不释放名额，死亡才可补充。
+    pub(crate) fn rc_small_count(&self, owner: EntityIdx) -> usize {
+        self.entities
+            .iter()
+            .filter(|(id, e)| e.runtime.owner == owner && e.runtime.alive && e.runtime.hp > 0 && self.is_rc_small(*id))
+            .count()
     }
 
     /// 专属行动接管整次出手，无目标时也不回退普通攻击。
@@ -39,14 +48,15 @@ impl CombatRuntime {
             "[0]使用[这确实太小了]"
         };
         updates.add(RunUpdate::new(text, actor.0 as usize, actor.0 as usize, 1).without_replay_target());
-        // 使用引擎等概率的三值抽样，每次召唤 1～3 只，不额外设置数量上限。
+        // 每次等概率抽取 1～3 只，再按六个存活名额截断；满员也不退回普攻。
         let count = loop {
             let value = self.rng.r3();
             if value < 3 {
                 break 1 + value as usize;
             }
         };
-        for _ in 0..count {
+        let slots = SMALL_CAP.saturating_sub(self.rc_small_count(actor));
+        for _ in 0..count.min(slots) {
             self.rc_spawn_small(actor, updates);
         }
     }
