@@ -145,11 +145,16 @@ mod reserve_tests {
 
 impl CombatRuntime {
     pub(super) fn prepare_search_action(&mut self, actor: EntityIdx, smart: bool) -> Option<PreparedPlainAction> {
+        let clever_boss = self.is_clever_boss(actor);
+        let autonomous = clever_boss && self.scratch.search_turn.is_none();
+        if autonomous {
+            self.scratch.search_turn = Some(SearchTurn::new(None, None));
+        }
         let runtime = &self.entities.get(actor)?.runtime;
-        // 特殊技能权重和 Boss 继续使用原版路径，不改变其抽样语义。
+        // 专用 Clever Boss 使用普通技能库存，其余 Boss 保持原版专属路径。
         if self.is_rc_actor(actor)
             || cfg!(feature = "cards")
-            || runtime.flags.contains(PlayerKindFlags::BOSS)
+            || (runtime.flags.contains(PlayerKindFlags::BOSS) && !clever_boss)
             || self.entities.get(actor)?.template.skills.uses_effective_skill_weights()
         {
             self.scratch.search_turn = None;
@@ -244,15 +249,33 @@ impl CombatRuntime {
                 _ => 0,
             })
             .collect();
+        let stocks = self.scratch.skill_reserves.clone();
+        let multiplier = self.clever_actor_multiplier_micros(actor);
         let turn = self.scratch.search_turn.as_mut()?;
         turn.actor_runtime = Some(actor_runtime);
+        turn.skill_reserves = stocks;
+        turn.skill_multiplier_micros = multiplier;
         turn.candidate_levels = candidate_levels;
         turn.actor = Some(actor);
         turn.team = Some(team);
         turn.candidates = candidates;
+        if autonomous {
+            // 原版入口内只接管这个 Boss；不启动整场搜索，也不影响对手策略。
+            let preview = turn.clone();
+            let scores = crate::runtime::clever_policy::score_turn(self, &preview);
+            let chosen = scores
+                .as_ref()
+                .and_then(|scores| (0..scores.len()).max_by(|&a, &b| scores[a].total_cmp(&scores[b]).then(b.cmp(&a))))
+                .or_else(|| (!preview.candidates.is_empty()).then_some(0));
+            self.scratch.search_turn.as_mut()?.chosen = chosen;
+        }
+        let turn = self.scratch.search_turn.as_ref()?;
         let selected = turn.chosen.and_then(|index| turn.candidates.get(index)).cloned();
         if let Some(seed) = turn.simulation_seed {
             self.rng = RC4::new(&seed.to_le_bytes(), 1);
+        }
+        if autonomous {
+            self.scratch.search_turn = None;
         }
         if let Some(selected) = selected {
             if let PreparedPlainAction::BuiltinSkill(action) = &selected.action

@@ -1,16 +1,16 @@
-//! 已训练混合策略的独立推理；严格复现机制摘要 v1，不读取名字、种子或启发式分数。
+//! 已训练混合策略的独立推理；严格复现机制摘要 v3 及发放点库存，不读取名字、种子或启发式分数。
 use super::model_state::{ModelPayload, ModelPlayerRuntime, ModelSkills};
 use super::search::{SearchCandidate, SearchTurn};
 use super::*;
 use std::sync::OnceLock;
 
-pub const MODEL_ID: &str = "clever-mixed-v1-20261127-e15";
-pub const CONTEXT_WIDTH: usize = 1318;
-pub const ACTION_WIDTH: usize = 327;
+pub const MODEL_ID: &str = "clever-mixed-v3-20261128-e8";
+pub const CONTEXT_WIDTH: usize = 1469;
+pub const ACTION_WIDTH: usize = 329;
 const ENTITY_WIDTH: usize = 146;
 const POOL_WIDTH: usize = ENTITY_WIDTH * 2 + 1;
-const WEIGHTS: &[u8] = include_bytes!("../../models/clever-mixed-v1/weights.bin");
-pub const MODEL_MANIFEST: &str = include_str!("../../models/clever-mixed-v1/manifest.json");
+const WEIGHTS: &[u8] = include_bytes!("../../models/clever-mixed-v3/weights.bin");
+pub const MODEL_MANIFEST: &str = include_str!("../../models/clever-mixed-v3/manifest.json");
 
 /// 普通、召唤物和被动技能的 1-based 注册编号转为训练列，不把编号当作数值特征。
 fn skill_column(id: u32) -> Option<usize> {
@@ -92,7 +92,11 @@ fn entity_vector(
     ];
     v.resize(ENTITY_WIDTH, 0.0);
     for lane in &skills.lanes {
-        let offset = 24 + 2 * skill_column(lane.skill_id)?;
+        // 未训练的专属技能不伪造连续编号；仍可按角色真实属性与已知技能决策。
+        let Some(column) = skill_column(lane.skill_id) else {
+            continue;
+        };
+        let offset = 24 + 2 * column;
         v[offset] = v[offset].max(lane.level as f32);
         v[offset + 1] = v[offset + 1].max(lane.build_level as f32);
     }
@@ -213,13 +217,54 @@ pub(crate) fn score_turn(runtime: &CombatRuntime, turn: &SearchTurn) -> Option<V
             values: entity_vector(id, e.template.max_hp, &projected, &skills, &states)?,
         });
     }
-    let context = encode_context(&entities, actor, team)?;
+    let mut context = encode_context(&entities, actor, team)?;
+    let stocks = encode_reserves(&entities, actor, team, &turn.skill_reserves);
+    context.push(((f64::from(turn.skill_multiplier_micros) / 1_000_000.0).min(50.0).ln()) as f32);
+    context.extend(stocks.iter().flatten().copied());
     let mut actions = Vec::new();
     for (index, candidate) in turn.candidates.iter().enumerate() {
         let action = action_input(candidate, *turn.candidate_levels.get(index)?)?;
-        actions.push(encode_action(&entities, actor, team, &action)?);
+        let mut values = encode_action(&entities, actor, team, &action)?;
+        values.extend(action_stock(&stocks[0], action.key));
+        actions.push(values);
     }
     score_features(&context, &actions)
+}
+
+/// 发放后的库存与未发额度按技能语义编码，阵营聚合仍使用回合边界存活表。
+fn encode_reserves(
+    entities: &[EncodedEntity],
+    actor: EntityIdx,
+    team: usize,
+    reserves: &[crate::runtime::skill_reserve::SkillReserve],
+) -> [[f32; 50]; 3] {
+    let mut groups = [[0.0; 50]; 3];
+    for reserve in reserves {
+        let Some(index) = BuiltinActiveSkill::CORE.iter().position(|s| s.export_name() == reserve.skill) else {
+            continue;
+        };
+        let values = [
+            (reserve.available() as f64).ln_1p() as f32,
+            reserve.credit().max(0.0).ln_1p() as f32,
+        ];
+        for (field, value) in values.into_iter().enumerate() {
+            if reserve.actor == actor {
+                groups[0][index * 2 + field] += value;
+            }
+            if let Some(owner) = entities.iter().find(|e| e.id == reserve.actor && e.alive) {
+                groups[if owner.team == team { 1 } else { 2 }][index * 2 + field] += value;
+            }
+        }
+    }
+    groups
+}
+/// 普攻不附带技能库存，主动技能读取行动者对应技能的同名共享账本。
+fn action_stock(actor_stock: &[f32; 50], key: usize) -> [f32; 2] {
+    if (2..27).contains(&key) {
+        [actor_stock[(key - 2) * 2], actor_stock[(key - 2) * 2 + 1]]
+    } else {
+        [0.0; 2]
+    }
 }
 
 fn weights() -> &'static [f32] {
@@ -257,29 +302,54 @@ pub fn score_features(context: &[f32], actions: &[Vec<f32>]) -> Option<Vec<f32>>
         return None;
     }
     let w = weights();
-    let x = normalize(context, &w[..1318], &w[1318..2636]);
-    let mut state = linear(&x, &w[3290..340698], &w[340698..340954]);
+    // 与导出脚本同序顺读参数，维度变化时不再手工维护易错的绝对偏移。
+    let mut offset = 0;
+    let mut take = |count| {
+        let slice = &w[offset..offset + count];
+        offset += count;
+        slice
+    };
+    let xmean = take(CONTEXT_WIDTH);
+    let xstd = take(CONTEXT_WIDTH);
+    let amean = take(ACTION_WIDTH);
+    let astd = take(ACTION_WIDTH);
+    let sw = take(256 * CONTEXT_WIDTH);
+    let sb = take(256);
+    let normw = take(256);
+    let normb = take(256);
+    let sw2 = take(128 * 256);
+    let sb2 = take(128);
+    let aw = take(128 * ACTION_WIDTH);
+    let ab = take(128);
+    let aw2 = take(128 * 128);
+    let ab2 = take(128);
+    let qw = take(128 * 384);
+    let qb = take(128);
+    let qw2 = take(128);
+    let qb2 = take(1);
+    let x = normalize(context, xmean, xstd);
+    let mut state = linear(&x, sw, sb);
     silu(&mut state);
     let mean = state.iter().sum::<f32>() / 256.0;
     let variance = state.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / 256.0;
     for i in 0..256 {
-        state[i] = (state[i] - mean) / (variance + 1e-5).sqrt() * w[340954 + i] + w[341210 + i];
+        state[i] = (state[i] - mean) / (variance + 1e-5).sqrt() * normw[i] + normb[i];
     }
-    let mut state = linear(&state, &w[341466..374234], &w[374234..374362]);
+    let mut state = linear(&state, sw2, sb2);
     silu(&mut state);
     let mut scores = Vec::new();
     for input in actions {
-        let a = normalize(input, &w[2636..2963], &w[2963..3290]);
-        let mut a = linear(&a, &w[374362..416218], &w[416218..416346]);
+        let a = normalize(input, amean, astd);
+        let mut a = linear(&a, aw, ab);
         silu(&mut a);
-        let mut a = linear(&a, &w[416346..432730], &w[432730..432858]);
+        let mut a = linear(&a, aw2, ab2);
         silu(&mut a);
         let mut interaction = state.clone();
         interaction.extend(&a);
         interaction.extend(state.iter().zip(&a).map(|(s, a)| s * a));
-        let mut q = linear(&interaction, &w[432858..482010], &w[482010..482138]);
+        let mut q = linear(&interaction, qw, qb);
         silu(&mut q);
-        scores.push(linear(&q, &w[482138..482266], &w[482266..482267])[0]);
+        scores.push(linear(&q, qw2, qb2)[0]);
     }
     scores.iter().all(|v| v.is_finite()).then_some(scores)
 }
@@ -305,11 +375,13 @@ mod tests {
         context: Vec<f32>,
         action_features: Vec<Vec<f32>>,
         expected_logits: Vec<f32>,
+        skill_reserves: Vec<crate::runtime::skill_reserve::SkillReserve>,
+        multiplier: f64,
     }
 
     #[test]
     fn real_decisions_match_python_features_and_pytorch_logits() {
-        // 三个真实决策场景包含不同队伍规模与召唤物，不冻结源码或配置形状。
+        // 八个真实发放决策覆盖四倍率及两种人数，逐列验证库存和模型数值。
         let samples: Vec<Sample> = serde_json::from_str(include_str!("clever_policy/real-decisions.json")).unwrap();
         for sample in samples {
             let entities: Vec<_> = sample
@@ -329,14 +401,22 @@ mod tests {
                     }
                 })
                 .collect();
-            let context = encode_context(&entities, sample.actor, sample.team).unwrap();
+            let mut context = encode_context(&entities, sample.actor, sample.team).unwrap();
+            let stocks = encode_reserves(&entities, sample.actor, sample.team, &sample.skill_reserves);
+            context.push(sample.multiplier.min(50.0).ln() as f32);
+            context.extend(stocks.iter().flatten().copied());
+            assert_eq!(context.len(), sample.context.len());
             for (a, b) in context.iter().zip(&sample.context) {
                 assert!((a - b).abs() < 1e-4, "context {a} != {b}");
             }
             let actions: Vec<_> = sample
                 .actions
                 .iter()
-                .map(|a| encode_action(&entities, sample.actor, sample.team, a).unwrap())
+                .map(|a| {
+                    let mut values = encode_action(&entities, sample.actor, sample.team, a).unwrap();
+                    values.extend(action_stock(&stocks[0], a.key));
+                    values
+                })
                 .collect();
             for (actual, expected) in actions.iter().zip(&sample.action_features) {
                 for (a, b) in actual.iter().zip(expected) {

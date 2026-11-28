@@ -97,13 +97,25 @@ fn prepare_reserves(
 }
 
 impl CombatRuntime {
+    /// 专用 Clever Boss 固定100倍；其他角色保持本场设置，绝不改写全局倍率。
+    pub(crate) fn clever_actor_multiplier_micros(&self, actor: EntityIdx) -> u32 {
+        if self.is_clever_boss(actor) {
+            100_000_000
+        } else if self.scratch.clever_skill_multiplier_micros == 0 {
+            1_000_000
+        } else {
+            self.scratch.clever_skill_multiplier_micros
+        }
+    }
+    /// 只识别真实 Boss，本体分身保留 Boss 身份时同样采用固定策略。
+    pub(crate) fn is_clever_boss(&self, actor: EntityIdx) -> bool {
+        self.entities
+            .get(actor)
+            .is_some_and(|e| e.template.name == "clever" && e.runtime.flags.contains(PlayerKindFlags::BOSS))
+    }
     /// 所有技能统一准备一次，避免逐技能发放绕过库存批量限制。
     pub(crate) fn prepare_skill_reserves(&mut self, actor: EntityIdx, chances: &[(&str, f64)]) {
-        let multiplier = if self.scratch.clever_skill_multiplier_micros == 0 {
-            1.0
-        } else {
-            f64::from(self.scratch.clever_skill_multiplier_micros) / 1_000_000.0
-        };
+        let multiplier = f64::from(self.clever_actor_multiplier_micros(actor)) / 1_000_000.0;
         let rng = &mut self.rng;
         prepare_reserves(&mut self.scratch.skill_reserves, actor, chances, multiplier, || {
             // 53位均匀相位；独立于Python随机数实现，不读取正式战斗未来随机流。

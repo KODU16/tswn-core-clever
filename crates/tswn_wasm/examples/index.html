@@ -76,10 +76,10 @@
                 </div>
                 <div class="side-controls">
                     <label for="strategySelect">出招策略 </label>
-                    <select id="strategySelect"><option value="legacy">原版策略（默认）</option><option value="search">Clever 学习模型（混合 v1）</option></select>
+                    <select id="strategySelect"><option value="legacy">原版策略（默认）</option><option value="search">Clever 学习模型（混合 v3）</option></select>
                     <label class="clever-multiplier-option" for="cleverSkillMultiplier">技能倍率 <input id="cleverSkillMultiplier" type="text" inputmode="decimal" value="1" size="7" aria-label="Clever技能倍率" title="0.1～100，默认1；仅影响Clever技能储备的累计速度"></label>
                     <div class="input-note">仅对 Clever 生效，按原版扫描份额累计技能次数，允许储存后连续使用；倍率越高，选招越自由。每项每次最多新增1次，仍需满足MP、状态和目标条件。</div>
-                    <div class="input-note">默认双方采用所选策略。Clever 使用混合模型 v1（第 15 轮最佳权重）选择动作；技能按熟练度及原版顺序累计储备，再由模型选招和目标。未覆盖的专属技能场景回退旧 Clever，Boss 行动沿用原机制。</div>
+                    <div class="input-note">默认双方采用所选策略。Clever 使用混合模型 v3（第 8 轮最佳权重），根据战场、技能库存和倍率选择动作与目标。技能按熟练度及原版顺序发放；clever Boss 固定使用100倍模型策略，其余 Boss 沿用原机制。</div>
                     <label class="checkbox-option"><input type="checkbox" id="scoreLegacyOpponents"><span>评分验证：仅被测侧及队友使用 Clever，对手使用原版</span></label>
                     <div class="input-note">仅对 Clever 评分生效；不勾选时双方均使用 Clever。与全员原版评分比较，评分差即提升量。</div>
                     <label class="boss-picker checkbox-option"><input type="checkbox" id="bossChallenge"><span>挑战 Boss</span></label>
@@ -119,6 +119,8 @@
                         <!-- RC 使用指定名字生成徽章，点击后仍输入 rc@!。 -->
                         <!-- 涵虚沿用四列 Boss 表的统一图标和选择逻辑。 -->
                     <!-- 餐厅使用共用 Emoji 图标入口。 -->
+                    <!-- 固定100倍模型策略的专用挑战入口。 -->
+                    <option value="clever">clever</option>
                     <option value="会员制餐厅">会员制餐厅</option>
                     <option value="ReturnVoid">涵虚</option>
                     <option value="rc">rc</option>

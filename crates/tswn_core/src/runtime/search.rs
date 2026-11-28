@@ -79,6 +79,93 @@ mod tests {
         ))
     }
 
+    /// 专用 Boss 无论场上策略或倍率都使用100倍账本和同一个模型，不接管对手。
+    #[test]
+    fn clever_boss_fixed_policy_and_multiplier_match_legacy_and_search() {
+        let runner = RuntimeRunner::from_custom_mixed_namerena_raw(
+            "clever@!\n\nalpha\n\nseed:clever-boss".to_owned(),
+            default_custom_runtime_import_config().unwrap(),
+        )
+        .unwrap();
+        let mut field = runner.runtime().clone();
+        let boss = field.entities.iter().find(|(_, e)| e.template.name == "clever").unwrap().0;
+        let e = field.entities.get(boss).unwrap();
+        assert_eq!(
+            [
+                e.runtime.hp,
+                e.runtime.attack,
+                e.runtime.defense,
+                e.runtime.speed,
+                e.runtime.agility,
+                e.runtime.magic,
+                e.runtime.resistance,
+                e.runtime.wisdom
+            ],
+            [360, 54, 54, 214, 54, 54, 54, 54]
+        );
+        assert_eq!(e.template.skills.levels().iter().filter(|&&level| level == 106).count(), 35);
+        let enemy = field.entities.iter().find(|(id, _)| *id != boss).unwrap().0;
+        assert_eq!(field.clever_actor_multiplier_micros(enemy), 1_000_000);
+        for step in 0..16 {
+            // 只推进这一个真实行动机会，避免对手策略不同产生的战场差异干扰检查。
+            let ids: Vec<_> = field.entities.iter().map(|(id, _)| id).collect();
+            for id in ids {
+                let entity = field.entities.get_mut(id).unwrap();
+                entity.runtime.move_state.speed_points = if id == boss { MOVE_POINT_THRESHOLD } else { 0 };
+                if entity.runtime.alive {
+                    entity.runtime.hp = entity.template.max_hp;
+                }
+            }
+            let mut expected = field.clone();
+            expected.scratch.clever_skill_multiplier_micros = 100_000_000;
+            let turn = expected.search_turn_preview();
+            if turn.actor != Some(boss) {
+                // 蓄力、潜伏等强制后续阶段仍由原引擎完成，不是可自由选招机会。
+                field.run_minimal_round();
+                continue;
+            }
+            assert_eq!(turn.skill_multiplier_micros, 100_000_000);
+            let scores = crate::runtime::clever_policy::score_turn(&expected, &turn).unwrap();
+            let chosen = (0..scores.len())
+                .max_by(|&a, &b| scores[a].total_cmp(&scores[b]).then(b.cmp(&a)))
+                .unwrap();
+            expected.scratch.search_turn = Some(SearchTurn::new(Some(chosen), None));
+            expected.run_minimal_round();
+            expected.scratch.search_turn = None;
+            for multiplier in [100_000, 1_000_000, 50_000_000, 100_000_000] {
+                for mode in 0..3 {
+                    let mut actual = field.clone();
+                    actual.scratch.clever_skill_multiplier_micros = multiplier;
+                    if mode == 0 {
+                        actual.run_minimal_round();
+                    } else {
+                        actual.run_search_round(SearchConfig {
+                            team: if mode == 2 { Some(1) } else { None },
+                            ..Default::default()
+                        });
+                    }
+                    assert_eq!(actual.scratch.clever_skill_multiplier_micros, multiplier);
+                    assert_eq!(actual.clever_actor_multiplier_micros(enemy), multiplier);
+                    assert_eq!(actual.scratch.skill_reserves, expected.scratch.skill_reserves);
+                    for (id, e) in actual.entities.iter() {
+                        assert_eq!(
+                            e.runtime,
+                            expected.entities.get(id).unwrap().runtime,
+                            "step={step},mode={mode},multiplier={multiplier}"
+                        );
+                    }
+                    let mut left = actual.rng.clone();
+                    let mut right = expected.rng.clone();
+                    for _ in 0..8 {
+                        assert_eq!(left.next_u8(), right.next_u8());
+                    }
+                    assert!(actual.scratch.search_turn.is_none());
+                }
+            }
+            field = expected;
+        }
+    }
+
     #[test]
     fn trained_policy_selects_and_settles_highest_scoring_action() {
         // 用真实候选与结算比较，验证默认 Clever 确实调用新模型且不额外消耗随机流。
@@ -956,6 +1043,9 @@ pub(crate) struct SearchTurn {
     /// 决策点运行态与候选技能等级只用于模型输入，不携带随机流。
     pub actor_runtime: Option<PlayerRuntime>,
     pub candidate_levels: Vec<u32>,
+    /// 候选准备后发放的账本快照，预览不得给正式战场增发。
+    pub skill_reserves: Vec<crate::runtime::skill_reserve::SkillReserve>,
+    pub skill_multiplier_micros: u32,
     /// 行动前魅惑等状态解析后的有效阵营，目标和价值使用同一口径。
     pub team: Option<usize>,
 }
@@ -968,6 +1058,8 @@ impl SearchTurn {
             actor: None,
             actor_runtime: None,
             candidate_levels: Vec::new(),
+            skill_reserves: Vec::new(),
+            skill_multiplier_micros: 1_000_000,
             team: None,
         }
     }

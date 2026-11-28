@@ -10,9 +10,31 @@
 
 普攻每个目标只有一个固定类型的候选：按攻魔与目标防抗的简单伤害估计自动选较高者，并检查魔攻 MP；不另外枚举物攻／魔攻，也不训练两者的分类。模型仍学习何时普攻、何时花技能库存及目标选择。真实伤害始终走引擎结算。具体规则见 [Clever 说明](../../docs/clever-search.md)。
 
-下文 `gpu_trial.py` 与既有缓存属于旧的无库存单步试训，尚未实现读取这些新储备特征，不可直接运行旧续训命令并声称已训练库存策略。
+## v3 四倍率混合模型（当前发布）
 
-`gpu_trial.py` 读取战斗模拟导出的原始状态和配对动作结果，训练一个用于动作排序的 CUDA 网络。它是独立试训工具，尚未接入线上 Clever，也不是生产 `encoder-v1` 的替代实现。
+将 v3 归档解包到 C:/codex_tmp/clever-v3-raw，保留 clever-battle-data-v3、clever-battle-data-v3-mult01、clever-battle-data-v3-mult50、clever-battle-data-v3-mult100 四个目录：
+
+```powershell
+C:/codex_envs/clever-gpu/Scripts/python.exe scripts/clever_training/reserve_v3_trial.py --raw-parent C:/codex_tmp/clever-v3-raw --minutes 10
+```
+
+v3 强制校验 continuation_policy=reserve-v6、决策点库存与技能候选资格，并复用 reserve_v2_trial.py 的特征和审计函数。仅从头训练一个混合模型，不加载 v1/v2 权重。此次最佳为第8轮，验证收益连续20轮不改善后于第28轮停止；实际仅含1v1/2v2，验证只有1v1、测试只有2v2。当前权重、完整结果与导出方法见 [v3 模型说明](../../crates/tswn_core/models/clever-mixed-v3/README.md)。
+
+## v2 历史数据与共享特征
+
+先将归档解包到 ASCII 路径，例如 C:/codex_tmp；四个目录 clever-battle-data-v2、clever-battle-data-v2-mult01、clever-battle-data-v2-mult50、clever-battle-data-v2-mult100 必须同时保留。执行：
+
+```powershell
+C:/codex_envs/clever-gpu/Scripts/python.exe scripts/clever_training/reserve_v2_trial.py --raw-parent C:/codex_tmp --minutes 10
+```
+
+此工具在原机制摘要上增加151个情景列和2个动作列，使用候选准备后的同名技能可用库存与未发额度，倍率特征为 log(min(倍率,50))，使已验证等效的50～100区间共享表示。原始倍率保留用于分组评估。完全相同的训练特征及标签去重，避免饱和区重复样本增加权重；同阵容跨倍率评估按同一统计簇重采样，不当作独立战斗。名字只用于划分和审计，不参与模型输入。
+
+单一混合网络保留实际数据分布，不另训倍率专家。训练最多10分钟，每轮验证：至少10轮后，最近3轮训练损失下降、验证MSE高于历史最低5%、动作收益比最佳低0.02个百分点时提前停止；验证收益连续20轮无改善也提前结束。仅验证集选择最佳检查点，测试集用于最终评估。可添加 --evaluate-only 无梯度复核，--output 指定结果目录。
+
+v2归档标注 continuation_policy=legacy：当前动作使用储备资格，随后双方按原版续局。该数据可以监督当前动作的单步收益，不能证明长期储存时机或完整储备策略胜率已经改善。归档只采集每场前4个决策，长期高库存局面覆盖有限。下文旧缓存仍属于无库存v1，不能混充新储备数据。共享的 gpu_trial.py 通过明确版本和列定义复用网络、损失及检查点逻辑。
+
+`gpu_trial.py` 读取战斗模拟导出的原始状态和配对动作结果，训练一个用于动作排序的 CUDA 网络。共享训练器已用于线上 v3；下文旧 v1 命令和指标仅用于历史复现，不替代当前储备模型。
 
 ## 数据处理
 

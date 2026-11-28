@@ -716,7 +716,7 @@ impl CombatRuntime {
         }
 
         // 搜索只替换候选选择，仍由原回合管线执行与结算。
-        if self.scratch.search_turn.is_some() {
+        if self.scratch.search_turn.is_some() || self.is_clever_boss(actor) {
             return self.prepare_search_action(actor, smart);
         }
         #[cfg(not(feature = "no_debug"))]

@@ -1,0 +1,172 @@
+{
+  "id": "clever-mixed-v3-20261128-e8",
+  "feature_version": "mechanism-summary-reserve-v3",
+  "state_width": 1469,
+  "action_width": 329,
+  "training_seed": 20261128,
+  "epoch": 8,
+  "dtype": "float32 little-endian row-major",
+  "weights_sha256": "789222933d110edc514ca942021f408770e02f03c68a5c3fec17c05eb00c186e",
+  "training_checkpoint_sha256": "c844ce2132c4d42663dfbbfafde01794cfbf687e0b52759ef03562d0651303a8",
+  "inference_float_count": 521485,
+  "layout": [
+    {
+      "name": "xmean",
+      "shape": [
+        1469
+      ],
+      "offset_floats": 0,
+      "length": 1469
+    },
+    {
+      "name": "xstd",
+      "shape": [
+        1469
+      ],
+      "offset_floats": 1469,
+      "length": 1469
+    },
+    {
+      "name": "amean",
+      "shape": [
+        329
+      ],
+      "offset_floats": 2938,
+      "length": 329
+    },
+    {
+      "name": "astd",
+      "shape": [
+        329
+      ],
+      "offset_floats": 3267,
+      "length": 329
+    },
+    {
+      "name": "state.0.weight",
+      "shape": [
+        256,
+        1469
+      ],
+      "offset_floats": 3596,
+      "length": 376064
+    },
+    {
+      "name": "state.0.bias",
+      "shape": [
+        256
+      ],
+      "offset_floats": 379660,
+      "length": 256
+    },
+    {
+      "name": "state.2.weight",
+      "shape": [
+        256
+      ],
+      "offset_floats": 379916,
+      "length": 256
+    },
+    {
+      "name": "state.2.bias",
+      "shape": [
+        256
+      ],
+      "offset_floats": 380172,
+      "length": 256
+    },
+    {
+      "name": "state.4.weight",
+      "shape": [
+        128,
+        256
+      ],
+      "offset_floats": 380428,
+      "length": 32768
+    },
+    {
+      "name": "state.4.bias",
+      "shape": [
+        128
+      ],
+      "offset_floats": 413196,
+      "length": 128
+    },
+    {
+      "name": "action.0.weight",
+      "shape": [
+        128,
+        329
+      ],
+      "offset_floats": 413324,
+      "length": 42112
+    },
+    {
+      "name": "action.0.bias",
+      "shape": [
+        128
+      ],
+      "offset_floats": 455436,
+      "length": 128
+    },
+    {
+      "name": "action.2.weight",
+      "shape": [
+        128,
+        128
+      ],
+      "offset_floats": 455564,
+      "length": 16384
+    },
+    {
+      "name": "action.2.bias",
+      "shape": [
+        128
+      ],
+      "offset_floats": 471948,
+      "length": 128
+    },
+    {
+      "name": "q.0.weight",
+      "shape": [
+        128,
+        384
+      ],
+      "offset_floats": 472076,
+      "length": 49152
+    },
+    {
+      "name": "q.0.bias",
+      "shape": [
+        128
+      ],
+      "offset_floats": 521228,
+      "length": 128
+    },
+    {
+      "name": "q.3.weight",
+      "shape": [
+        1,
+        128
+      ],
+      "offset_floats": 521356,
+      "length": 128
+    },
+    {
+      "name": "q.3.bias",
+      "shape": [
+        1
+      ],
+      "offset_floats": 521484,
+      "length": 1
+    }
+  ],
+  "selection": "best validation gain checkpoint; validation patience early stop",
+  "input_exclusions": [
+    "name",
+    "suffix",
+    "seed",
+    "PBB score",
+    "heuristic score"
+  ]
+}

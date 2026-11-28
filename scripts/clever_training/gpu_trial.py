@@ -263,12 +263,13 @@ def prepare(data, output):
     return arrays
 
 
-def train(arrays, output, epochs, seed, team_sizes, resume=None, minutes=0, learning_rate=3e-4, evaluate_only=False):
+def train(arrays, output, epochs, seed, team_sizes, resume=None, minutes=0, learning_rate=3e-4, evaluate_only=False, definition=None):
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
     assert torch.cuda.is_available(), 'CUDA required; no silent CPU fallback'
-    definition = feature_definition()
+    # v1与储备v2共用训练器，通过明确列定义校验维度和检查点版本。
+    definition = definition or feature_definition()
     assert len(definition['context_columns']) == arrays['x'].shape[-1]
     assert len(definition['action_columns']) == arrays['a'].shape[-1]
     save_json(output / 'feature_definition.json', definition)
@@ -281,7 +282,8 @@ def train(arrays, output, epochs, seed, team_sizes, resume=None, minutes=0, lear
     torch.backends.cudnn.benchmark = False
     # 专家模型与混合模型复用同一划分，只按参战人数限制样本。
     eligible = np.isin(arrays['team_size'], team_sizes)
-    train_ids = np.flatnonzero((arrays['split'] == 'train') & eligible)
+    # 饱和区完全相同的训练样本只计一次，验证/测试保留每个倍率并按阵容聚类。
+    train_ids = np.flatnonzero((arrays['split'] == 'train') & eligible & arrays.get('training_unique', True))
     val_ids = np.flatnonzero((arrays['split'] == 'validation') & eligible)
     test_ids = np.flatnonzero((arrays['split'] == 'test') & eligible)
     if min(len(train_ids), len(val_ids), len(test_ids)) == 0:
@@ -317,7 +319,7 @@ def train(arrays, output, epochs, seed, team_sizes, resume=None, minutes=0, lear
     if resume:
         # 旧检查点只存了权重，校验尺度后以较低学习率重建优化器继续训练。
         previous = torch.load(resume, weights_only=False, map_location='cuda')
-        assert previous['feature_version'] == 'mechanism-summary-trial-v1'
+        assert previous['feature_version'] == definition['version']
         for key, expected in [('xmean', xmean), ('xstd', xstd), ('amean', amean), ('astd', astd)]:
             np.testing.assert_allclose(previous[key], expected, rtol=0, atol=1e-6)
         model.load_state_dict(previous['state_dict'])
@@ -338,7 +340,7 @@ def train(arrays, output, epochs, seed, team_sizes, resume=None, minutes=0, lear
 
     def checkpoint(epoch):
         return {'state_dict': model.state_dict(), 'xmean': xmean.tolist(), 'xstd': xstd.tolist(),
-                'amean': amean.tolist(), 'astd': astd.tolist(), 'feature_version': 'mechanism-summary-trial-v1',
+                'amean': amean.tolist(), 'astd': astd.tolist(), 'feature_version': definition['version'],
                 'epoch': epoch, 'seed': seed, 'state_width': x.shape[-1], 'action_width': a.shape[-1],
                 'optimizer_state_dict': opt.state_dict(), 'grad_scaler_state_dict': scaler.state_dict()}
 
@@ -404,14 +406,17 @@ def train(arrays, output, epochs, seed, team_sizes, resume=None, minutes=0, lear
             stale += 1
         # 同时出现训练损失下降、验证误差上升和动作收益下降，才判断明显过拟合。
         if len(history) >= 10:
-            recent, initial = history[-5:], history[:5]
+            recent = history[-definition.get('overfit_window', 5):]
+            initial = history[:5]
             train_falling = np.mean([r['loss'] for r in recent]) < np.mean([r['loss'] for r in initial]) - .002
             mse_rising = np.mean([r['validation_probability_mse'] for r in recent]) > min(r['validation_probability_mse'] for r in history) * 1.05
-            gain_falling = np.mean([r['validation_selected_gain'] for r in recent]) < best - .001
+            gain_falling = np.mean([r['validation_selected_gain'] for r in recent]) < best - definition.get('overfit_gain_tolerance', .001)
             if train_falling and mse_rising and gain_falling:
                 stop_reason = 'overfitting: lower train loss, higher validation MSE, lower validation gain'
                 break
-        if not budget_seconds and stale >= 10:
+        # 储备v2即使未达到明确过拟合，也在验证收益长期停滞时结束，避免无效长训。
+        patience = definition.get('validation_patience', 0 if budget_seconds else 10)
+        if patience and stale >= patience:
             stop_reason = 'validation_patience'
             break
     if history:

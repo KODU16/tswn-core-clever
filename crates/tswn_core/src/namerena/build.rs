@@ -442,6 +442,10 @@ impl PlayerBuild {
                 levels[key] = level;
             }
         }
+        // Clever Boss 使用全部原版三十五项技能，不受名字推导或槽位翻倍影响。
+        if overlay_skills.is_none() && self.class == PlayerClass::Boss && self.name == "clever" {
+            levels[..35].fill(106);
+        }
         let rinick_identity = self.weapon.as_ref().is_some_and(|weapon| weapon.is_rinick_identity());
         let mut rinick_revive_attrs = None;
         let mut rinick_clone_skills = None;
@@ -650,6 +654,12 @@ impl PlayerBuild {
             attrs = [100, 100, 100, 100, 100, 100, 100, 1000];
             status = status_from_attrs(attrs, 0.0, true);
             status.speed = 100;
+        }
+        // Clever Boss 固定外显90七围，速度按普通公式还原，内部其余属性为54。
+        if self.class == PlayerClass::Boss && self.name == "clever" {
+            self.name_factor = 0.0;
+            attrs = [54, 54, 54, 54, 54, 54, 54, 360];
+            status = status_from_attrs(attrs, 0.0, true);
         }
         // 餐厅按外显七围减去 36，实际速度 160 单独保留，显示层固定显示 14。
         if self.class == PlayerClass::Boss && self.name == "会员制餐厅" {

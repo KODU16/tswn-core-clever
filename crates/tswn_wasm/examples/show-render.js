@@ -874,7 +874,7 @@ export function buildFrameRows(frame, roundIndex, previousStates = frame.states,
 
 /** 内部属性转为外显口径；速度先移除行动条基值，所有七围补回 36。 */
 export function displayBattleAttribute(value, key, state = null) {
-  // 餐厅实际速度 106 与指定外显速度 14 分开。
+  // 餐厅实际速度独立调整，指定外显速度始终为14。
   if (key === "speed" && state?.id_name === "会员制餐厅" && state?.player_type === "Boss") return 14;
   if (!Number.isFinite(value)) return "-";
   return value + 36 - (key === "speed" ? 160 : 0);

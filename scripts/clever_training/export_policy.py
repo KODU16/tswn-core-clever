@@ -31,10 +31,18 @@ def main():
     checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     if (checkpoint["feature_version"], checkpoint["state_width"], checkpoint["action_width"]) != (
         "mechanism-summary-trial-v1", 1318, 327
+    ) and (checkpoint["feature_version"], checkpoint["state_width"], checkpoint["action_width"]) != (
+        "mechanism-summary-reserve-v3", 1469, 329
     ):
         raise ValueError("检查点特征版本或维度与 Rust 推理不一致")
+    # v3 增加库存与倍率列，网络隐层保持一致，布局按检查点维度导出。
+    state_width, action_width = checkpoint["state_width"], checkpoint["action_width"]
+    shapes = dict(SHAPES)
+    shapes.update(xmean=(state_width,), xstd=(state_width,), amean=(action_width,), astd=(action_width,))
+    shapes["state.0.weight"] = (256, state_width)
+    shapes["action.0.weight"] = (128, action_width)
     chunks, layout, offset = [], [], 0
-    for name, shape in SHAPES.items():
+    for name, shape in shapes.items():
         value = checkpoint[name] if name in checkpoint else checkpoint["state_dict"][name].numpy()
         array = np.asarray(value, dtype="<f4")
         if array.shape != shape or not np.isfinite(array).all():
@@ -47,13 +55,13 @@ def main():
     blob = np.concatenate(chunks).astype("<f4").tobytes()
     manifest = {
         "id": args.model_id, "feature_version": checkpoint["feature_version"],
-        "state_width": 1318, "action_width": 327,
+        "state_width": state_width, "action_width": action_width,
         "training_seed": checkpoint["seed"], "epoch": checkpoint["epoch"],
         "dtype": "float32 little-endian row-major",
         "weights_sha256": hashlib.sha256(blob).hexdigest(),
         "training_checkpoint_sha256": hashlib.sha256(args.checkpoint.read_bytes()).hexdigest(),
         "inference_float_count": offset, "layout": layout,
-        "selection": "highest validation gain among mixed seeds; continuation did not improve",
+        "selection": "best validation gain checkpoint; validation patience early stop",
         "input_exclusions": ["name", "suffix", "seed", "PBB score", "heuristic score"],
     }
     args.output.mkdir(parents=True, exist_ok=True)

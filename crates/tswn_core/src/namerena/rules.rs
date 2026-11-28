@@ -4,7 +4,8 @@
 pub const SAITAMA_RETIREMENT_WINNER: &str = "SAITAMA";
 
 /// 内置 Boss 名字表；用于身份分类、默认技能与免疫规则查询。
-pub const BOSS_NAMES: [&str; 55] = [
+pub const BOSS_NAMES: [&str; 56] = [
+    "clever",
     "会员制餐厅",
     "ReturnVoid",
     "rc",

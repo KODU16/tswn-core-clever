@@ -15,6 +15,8 @@ const MODULE_CACHE_BUST = Date.now().toString(36);
 
 /** 固定角色的 Emoji 徽章优先于 WASM 生成的像素图标。 */
 const QUILT_EMOJI = [
+    // Clever 挑战与回放均显示指定脑 Emoji。
+    ["clever", "🧠"],
     // 菜与餐厅共用餐盘图标，像素徽章不覆盖 Emoji。
     ["会员制餐厅", "🍽️"],
     ["restaurant-dish", "🍽️"],
